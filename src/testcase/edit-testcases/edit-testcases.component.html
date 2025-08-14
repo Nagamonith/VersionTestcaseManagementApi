@@ -1,0 +1,315 @@
+<app-alert
+  [type]="alertType"
+  [message]="alertMessage"
+  [show]="showAlert"
+  [isConfirm]="isConfirmAlert"
+  (onConfirm)="handleConfirmDelete()"
+  (onCancel)="handleCancelDelete()">
+</app-alert>
+
+<div class="container">
+  <h2 class="text-center">Test Case Management</h2>
+
+  <!-- Module and Version display -->
+  <div class="module-info">
+    <div><strong>Module:</strong> {{ getModuleName(selectedModule()) }}</div>
+    <button class="btn-small-back" (click)="goBack()">🔙 Change Module</button>
+    <button class="btn-small" (click)="openModuleAttributes()">➕ Module Attributes</button>
+    <button class="btn-small" (click)="refreshVersionOptions()" title="Refresh version options">🔄 Refresh Versions</button>
+    <div class="debug-info" style="font-size: 12px; color: #666; margin-top: 5px;">
+      <strong>Debug:</strong> {{ versionOptions().length }} version options loaded
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters-container">
+    <label>Search Filters</label>
+    <div class="filters">
+      <div class="filter-group">
+        <label>Test Case ID:</label>
+        <input
+          type="text"
+          placeholder="Filter by TestCase ID"
+          [ngModel]="filter().testCaseId"
+          (ngModelChange)="updateFilter('testCaseId', $event)"
+        />
+      </div>
+      
+      <div class="filter-group">
+        <label>Use Case:</label>
+        <input
+          type="text"
+          placeholder="Filter by Use Case"
+          [ngModel]="filter().useCase"
+          (ngModelChange)="updateFilter('useCase', $event)"
+        />
+      </div>
+      
+      <div class="filter-group">
+        <label>Version:</label>
+        <select
+          [ngModel]="filter().version"
+          (ngModelChange)="updateFilter('version', $event)"
+        >
+          <option value="">All Versions</option>
+          <option *ngFor="let version of getUniqueVersions()" [value]="version">
+            {{ version }}
+          </option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Test case table -->
+  <div *ngIf="filteredTestCases().length > 0" class="table-container">
+    <table class="test-case-table">
+      <thead>
+        <tr>
+          <th>Sl.No</th>
+          <th>Version</th>
+          <th>Test Case ID</th>
+          <th>Use Case</th>
+          <th>Scenario</th>
+          <th>Steps</th>
+          <th>Expected</th>
+          
+          <!-- Dynamic attribute columns -->
+          <th *ngFor="let attrName of getUniqueAttributeNames()">
+            {{attrName}}
+          </th>
+          
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let testCase of filteredTestCases(); let i = index">
+          <td>{{ i + 1 }}</td>
+          <!-- FIXED: Display version correctly using productVersionId -->
+          <td>{{ testCase.productVersionId ? getVersionDisplayText(testCase.productVersionId) : (testCase.version || testCase.productVersionName || 'N/A') }}</td>
+          <td>{{ testCase.testCaseId }}</td>
+          <td class="wrap-text">{{ testCase.useCase }}</td>
+          <td class="wrap-text">{{ testCase.scenario }}</td>
+          <td class="wrap-text">
+            <div *ngFor="let step of testCase.steps; let i = index">
+              <strong>{{i+1}}.</strong> {{step.steps}}
+            </div>
+          </td>
+          <td class="wrap-text">
+            <div *ngFor="let step of testCase.steps; let i = index">
+              <strong>{{i+1}}.</strong> {{step.expectedResult}}
+            </div>
+          </td>
+          
+          <!-- Dynamic attribute values -->
+          <td *ngFor="let attrName of getUniqueAttributeNames()" class="wrap-text">
+            {{getAttributeValue(testCase, attrName) || '-'}}
+          </td>
+          
+          <td class="actions">
+            <button class="btn-small" (click)="startEditing(testCase)">Edit</button>
+            <button class="btn-small-danger" (click)="deleteTestCase(testCase.id, $event)">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- No results message -->
+  <div *ngIf="filteredTestCases().length === 0" class="no-results">
+    <div *ngIf="testCases().length === 0" class="no-data">
+      ⚠️ No test cases found for this module.
+      <button (click)="loadTestCases(selectedModule())" class="btn-refresh">Refresh</button>
+    </div>
+    <div *ngIf="testCases().length > 0 && filteredTestCases().length === 0" class="no-matches">
+      No test cases match your filters. Try adjusting your search criteria.
+    </div>
+  </div>
+
+  <button class="btn-save" (click)="openForm()">Add New Test Case</button>
+
+  <!-- Add/Edit Test Case Form -->
+  <div *ngIf="isEditing()" class="form-overlay">
+    <form [formGroup]="form" (ngSubmit)="saveTestCase()" class="test-case-form">
+      <h3>{{ form.value.id ? 'Edit' : 'Add' }} Test Case</h3>
+
+      <!-- FIXED: Version dropdown using productVersionId -->
+     <div class="form-group">
+  <label>Version:</label>
+  <select 
+    formControlName="productVersionId"
+    class="form-control">
+    <option value="" disabled>Select Version</option>
+    <option 
+      *ngFor="let version of versionOptions()" 
+      [value]="version.id">  <!-- Bind to version.id (GUID) -->
+      {{ version.version }} {{ version.isActive ? '(Active)' : '' }}  <!-- Display version string -->
+    </option>
+  </select>
+
+        <div *ngIf="form.get('productVersionId')?.invalid && (form.get('productVersionId')?.dirty || form.get('productVersionId')?.touched)" 
+            class="error-message">
+          Version is required
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Test Case ID:</label>
+        <input type="text" formControlName="testCaseId" required />
+        <div *ngIf="form.get('testCaseId')?.invalid && (form.get('testCaseId')?.dirty || form.get('testCaseId')?.touched)" 
+            class="error-message">
+          <span *ngIf="form.get('testCaseId')?.errors?.['required']">Test Case ID is required</span>
+          <span *ngIf="form.get('testCaseId')?.errors?.['pattern']">Must start with TC followed by numbers</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Use Case:</label>
+        <input type="text" formControlName="useCase" required />
+        <div *ngIf="form.get('useCase')?.invalid && (form.get('useCase')?.dirty || form.get('useCase')?.touched)" 
+            class="error-message">
+          <span *ngIf="form.get('useCase')?.errors?.['required']">Use Case is required</span>
+          <span *ngIf="form.get('useCase')?.errors?.['minlength']">Minimum 5 characters required</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Scenario:</label>
+        <textarea formControlName="scenario" rows="3" required></textarea>
+        <div *ngIf="form.get('scenario')?.invalid && (form.get('scenario')?.dirty || form.get('scenario')?.touched)" 
+            class="error-message">
+          <span *ngIf="form.get('scenario')?.errors?.['required']">Scenario is required</span>
+          <span *ngIf="form.get('scenario')?.errors?.['minlength']">Minimum 10 characters required</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Steps:</label>
+        <div formArrayName="steps">
+          <div *ngFor="let step of steps.controls; let i = index" [formGroupName]="i" class="step-item">
+            <div class="step-header">
+              <span>Step {{i + 1}}</span>
+              <button type="button" class="btn-small-danger" (click)="removeStep(i)" *ngIf="steps.length > 1">
+                Remove
+              </button>
+            </div>
+            <textarea formControlName="steps" rows="2" placeholder="Step description" required></textarea>
+            <div *ngIf="steps.at(i).get('steps')?.invalid && (steps.at(i).get('steps')?.dirty || steps.at(i).get('steps')?.touched)" 
+                class="error-message">
+              Step description is required
+            </div>
+            <textarea formControlName="expectedResult" rows="2" placeholder="Expected result" required></textarea>
+            <div *ngIf="steps.at(i).get('expectedResult')?.invalid && (steps.at(i).get('expectedResult')?.dirty || steps.at(i).get('expectedResult')?.touched)" 
+                class="error-message">
+              Expected result is required
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-small" (click)="addStep()">Add Step</button>
+      </div>
+
+      <!-- Dynamic Attributes -->
+      <div class="attributes-section" *ngIf="moduleAttributes().length > 0">
+        <h4>Attributes</h4>
+        <div formArrayName="attributes">
+          <div *ngFor="let attr of attributes.controls; let i = index" [formGroupName]="i" class="attribute-item">
+            <label>{{ moduleAttributes()[i]?.name || 'Attribute' }}</label>
+            <input type="hidden" formControlName="key" />
+            <textarea formControlName="value" [attr.required]="moduleAttributes()[i]?.isRequired"></textarea>
+            <div *ngIf="moduleAttributes()[i]?.isRequired && attributes.at(i).get('value')?.invalid && (attributes.at(i).get('value')?.dirty || attributes.at(i).get('value')?.touched)" 
+                class="error-message">
+              This attribute is required
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn-save" [disabled]="form.invalid">Save</button>
+        <button type="button" class="btn-small-danger" (click)="cancelEditing()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Module Attributes Modal -->
+  <div *ngIf="showModuleAttributesForm()" class="form-overlay">
+    <div class="test-case-form">
+      <h3>Manage Module Attributes</h3>
+      
+      <!-- Attributes List -->
+      <div *ngIf="!currentModuleAttribute()">
+        <table class="attributes-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Key</th>
+              <th>Type</th>
+              <th>Required</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let attr of moduleAttributes()">
+              <td>{{ attr.name }}</td>
+              <td>{{ attr.key }}</td>
+              <td>{{ attr.type }}</td>
+              <td>{{ attr.isRequired ? 'Yes' : 'No' }}</td>
+              <td>
+                <button class="btn-small" (click)="editModuleAttribute(attr)">Edit</button>
+                <button class="btn-small-danger" 
+                        (click)="deleteModuleAttribute(attr.id)"
+                        *ngIf="attr.id">
+                  Delete
+                </button>
+                <span *ngIf="!attr.id" class="no-delete-message">Cannot delete (no ID)</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="form-actions">
+          <button class="btn-save" (click)="addModuleAttribute()">Add New Attribute</button>
+          <button class="btn-small-danger" (click)="closeModuleAttributeForm()">Close</button>
+        </div>
+      </div>
+      
+      <!-- Attribute Form -->
+      <div *ngIf="currentModuleAttribute()" class="attribute-form">
+        <div class="form-group">
+          <label>Attribute Name:</label>
+          <input type="text" [(ngModel)]="currentModuleAttribute()!.name" required />
+        </div>
+        
+        <div class="form-group">
+          <label>Key (snake_case):</label>
+          <input type="text" [(ngModel)]="currentModuleAttribute()!.key" required />
+        </div>
+        
+        <div class="form-group">
+          <label>Type:</label>
+          <select [(ngModel)]="currentModuleAttribute()!.type">
+            <option value="text">Text</option>
+            <option value="number">Number</option>
+            <option value="checkbox">Checkbox</option>
+            <option value="date">Date</option>
+          </select>
+        </div>
+        
+        <div class="form-group">
+          <label>
+            <input type="checkbox" [(ngModel)]="currentModuleAttribute()!.isRequired" />
+            Required
+          </label>
+        </div>
+        
+        <div class="form-actions">
+          <button class="btn-save" (click)="saveModuleAttribute()" 
+                  [disabled]="!currentModuleAttribute()?.name || !currentModuleAttribute()?.key">
+            Save
+          </button>
+          <button class="btn-small-danger" (click)="closeModuleAttributeForm()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
