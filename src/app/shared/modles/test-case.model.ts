@@ -103,3 +103,46 @@ export interface TestCaseAttributeResponse {
   key: string;
   value: string;
 }
+
+/* ************** NEW INTERFACES FOR TEST SUITE EXECUTION CONTEXT ************** */
+
+export interface ExecutionUpload {
+  id: string;
+  fileName: string;
+  filePath: string;
+  fileType?: string;
+  fileSize: number;
+  uploadedAt: Date;
+  uploadedBy?: string;
+}
+
+export interface ExecutionDetails {
+  testSuiteTestCaseId?: number;
+  result?: TestCaseResult;
+  actual?: string;
+  remarks?: string;
+  addedAt?: Date;
+  updatedAt?: Date;
+  uploads?: ExecutionUpload[];
+}
+
+export interface TestSuiteTestCase {
+  id: number;
+  testSuiteId: string;
+  testCase: TestCase;
+  executionDetails: ExecutionDetails;
+}
+
+export interface UpdateExecutionDetailsRequest {
+  result?: TestCaseResult;
+  actual?: string;
+  remarks?: string;
+}
+
+export interface AddExecutionUploadRequest {
+  fileName: string;
+  filePath: string;
+  fileType?: string;
+  fileSize: number;
+  uploadedBy?: string;
+}
