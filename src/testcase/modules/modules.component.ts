@@ -371,6 +371,11 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
     remarks: response.remarks || ''
   };
 
+  // Version fallback: prefer explicit version, else productVersionName
+  if (!(testCase as any).version && (response as any).productVersionName) {
+    (testCase as any).version = (response as any).productVersionName;
+  }
+
   console.log('Converted test case:', testCase);
   return testCase;
 }
@@ -804,9 +809,13 @@ hasTestCasesToView(): boolean {
   
   if (this.selectedModule()) {
     if (this.showTestSuites) {
-      const suite = this.testSuites().find(s => s.id === this.selectedModule());
-      return !!(suite?.testCases && suite.testCases.length > 0);
+      // Enable buttons when a suite is selected; data will be fetched on demand
+      return true;
     } else {
+      // In module mode, enable once a version is chosen
+      if (this.selectedVersion) {
+        return true;
+      }
       const moduleCases = this.testCasePool().filter(
         tc => tc.moduleId === this.selectedModule()
       );
@@ -1229,23 +1238,27 @@ private updateTestRunProgress(): void {
       return this.getAttributeValue(testCase, attrKey);
     }
 
-    // Handle steps field specially
+    // Handle steps field specially as numbered list
     if (field === 'steps') {
       if (testCase.steps && testCase.steps.length > 0) {
-        return testCase.steps.map(step => step.steps).join('; ');
+        return testCase.steps
+          .map((step, idx) => `${idx + 1}. ${step.steps || ''}`)
+          .join('\n');
       }
       return '';
     }
 
-    // Handle expected field
+    // Handle expected field as numbered list
     if (field === 'expected') {
       if (testCase.steps && testCase.steps.length > 0) {
-        return testCase.steps.map(step => step.expectedResult).join('; ');
+        return testCase.steps
+          .map((step, idx) => `${idx + 1}. ${step.expectedResult || ''}`)
+          .join('\n');
       }
       return '';
     }
 
-    const value = testCase[field as keyof TestCase];
+    const value = (testCase as any)[field as keyof TestCase];
     return value !== undefined && value !== null ? value.toString() : '';
   }
 
