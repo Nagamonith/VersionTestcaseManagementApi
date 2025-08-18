@@ -362,7 +362,11 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
     result: this.parseTestCaseResult(response.result),
     steps: response.steps || [],
     attributes: response.attributes || [],
-    uploads: (response as any)?.executionDetails?.uploads?.map((u: any) => u.filePath) || (response.uploads || []),
+    uploads:
+      (response as any)?.executionDetails?.uploads?.map((u: any) => u.filePath) ||
+      (response as any)?.attachments?.map((u: any) => u.filePath) ||
+      (response as any)?.uploads ||
+      [],
     actual: response.actual || '',
     remarks: response.remarks || ''
   };
@@ -837,37 +841,30 @@ viewAllSelectedCases(): void {
   );
 
   forkJoin(requests).pipe(
-    map(responses => responses.flatMap(response => {
-      return (response.testCases || []).map(tcItem => {
-        const baseTestCase = tcItem.testCase;
-        const executionDetails = tcItem.executionDetails || {};
-        
-        const detail: TestCaseDetailResponse = {
-          id: baseTestCase.id,
-          moduleId: baseTestCase.moduleId,
-          productVersionId: baseTestCase.productVersionId,
-          version: baseTestCase.version || baseTestCase.productVersionName,
-          productVersionName: baseTestCase.productVersionName || baseTestCase.version,
-          testCaseId: baseTestCase.testCaseId,
-          useCase: baseTestCase.useCase,
-          scenario: baseTestCase.scenario,
-          testType: baseTestCase.testType,
-          testTool: baseTestCase.testTool,
-          result: executionDetails.result || baseTestCase.result,
-          actual: executionDetails.actual,
-          remarks: executionDetails.remarks,
-          createdAt: baseTestCase.createdAt,
-          updatedAt: baseTestCase.updatedAt,
-          expected: '',
-          steps: [],
-          attributes: [],
-          uploads: executionDetails.uploads?.map(u => u.filePath) || [],
-          testSuiteIds: [response.id],
-          executionDetails: executionDetails
-        };
-        return this.convertTestCaseDetailToTestCase(detail);
+    switchMap((responses: TestSuiteWithCasesResponse[]) => {
+      const detailRequests = responses.flatMap(response => {
+        const items = response.testCases || [];
+        return items.map(tcItem => 
+          this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+            map(detail => {
+              const exec = tcItem.executionDetails || {} as any;
+              const overlaid: TestCaseDetailResponse = {
+                ...detail,
+                result: exec.result || detail.result,
+                actual: exec.actual || detail.actual,
+                remarks: exec.remarks || detail.remarks,
+                executionDetails: exec,
+                uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
+              } as any;
+              return this.convertTestCaseDetailToTestCase(overlaid);
+            }),
+            catchError(() => of(null as unknown as TestCase))
+          )
+        );
       });
-    }))
+      return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
+    }),
+    map(allCases => (allCases || []).filter(Boolean) as TestCase[])
   ).subscribe({
     next: allCases => {
       this.versionTestCases.set(allCases);
@@ -918,37 +915,30 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
   );
 
   forkJoin(requests).pipe(
-    map(responses => responses.flatMap(response => {
-      return (response.testCases || []).map(tcItem => {
-        const baseTestCase = tcItem.testCase;
-        const executionDetails = tcItem.executionDetails || {};
-        
-        const detail: TestCaseDetailResponse = {
-          id: baseTestCase.id,
-          moduleId: baseTestCase.moduleId,
-          productVersionId: baseTestCase.productVersionId,
-          version: baseTestCase.version || baseTestCase.productVersionName,
-          productVersionName: baseTestCase.productVersionName || baseTestCase.version,
-          testCaseId: baseTestCase.testCaseId,
-          useCase: baseTestCase.useCase,
-          scenario: baseTestCase.scenario,
-          testType: baseTestCase.testType,
-          testTool: baseTestCase.testTool,
-          result: executionDetails.result || baseTestCase.result,
-          actual: executionDetails.actual,
-          remarks: executionDetails.remarks,
-          createdAt: baseTestCase.createdAt,
-          updatedAt: baseTestCase.updatedAt,
-          expected: '',
-          steps: [],
-          attributes: [],
-          uploads: executionDetails.uploads?.map(u => u.filePath) || [],
-          testSuiteIds: [response.id],
-          executionDetails: executionDetails
-        };
-        return this.convertTestCaseDetailToTestCase(detail);
+    switchMap((responses: TestSuiteWithCasesResponse[]) => {
+      const detailRequests = responses.flatMap(response => {
+        const items = response.testCases || [];
+        return items.map(tcItem => 
+          this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+            map(detail => {
+              const exec = tcItem.executionDetails || {} as any;
+              const overlaid: TestCaseDetailResponse = {
+                ...detail,
+                result: exec.result || detail.result,
+                actual: exec.actual || detail.actual,
+                remarks: exec.remarks || detail.remarks,
+                executionDetails: exec,
+                uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
+              } as any;
+              return this.convertTestCaseDetailToTestCase(overlaid);
+            }),
+            catchError(() => of(null as unknown as TestCase))
+          )
+        );
       });
-    }))
+      return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
+    }),
+    map(allCases => (allCases || []).filter(Boolean) as TestCase[])
   ).subscribe({
     next: allCases => {
       this.versionTestCases.set(allCases);
