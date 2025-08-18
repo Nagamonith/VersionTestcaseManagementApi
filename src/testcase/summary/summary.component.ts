@@ -3,15 +3,15 @@ import { CommonModule } from '@angular/common';
 import { RouterModule, ActivatedRoute, Router } from '@angular/router';
 import { TestCaseService } from 'src/app/shared/services/test-case.service';
 import { ProductService } from 'src/app/shared/services/product.service';
-import { combineLatest, map, Observable, of, switchMap } from 'rxjs';
+import { combineLatest, map } from 'rxjs';
 import { ProductModule } from 'src/app/shared/modles/module.model';
-import { TestCaseResponse } from 'src/app/shared/modles/test-case.model';
 import { Product } from 'src/app/shared/modles/product.model';
+import { VersionOption } from 'src/app/shared/modles/product.model';
 
 interface SummaryData {
   modules: ProductModule[];
   versions: string[];
-  testMatrix: Record<string, number>;
+  testMatrix: Record<string, Record<string, number>>; // Changed to nested record
   versionTotals: Record<string, number>;
 }
 
@@ -58,55 +58,65 @@ export class SummaryComponent {
   }
 
   private loadData(productId: string): void {
-  combineLatest([
-    this.testCaseService.getModulesByProduct(productId),
-    this.testCaseService.getTestCasesByProduct(productId)
-  ]).pipe(
-    map(([modules, testCases]) => {
-      if (!modules || !testCases) return null;
+    combineLatest([
+      this.testCaseService.getModulesByProduct(productId),
+      this.testCaseService.getTestCasesByProduct(productId),
+      this.testCaseService.getVersionOptions(productId)
+    ]).pipe(
+      map(([modules, testCases, versionOptions]) => {
+        if (!modules || !testCases) return null;
 
-      // Filter out undefined versions and get unique versions
-      const versions = Array.from(
-        new Set(
-          testCases
-            .map(tc => tc.version)
-            .filter((version): version is string => version !== undefined)
-        )
-      );
+        const options = (versionOptions || []) as VersionOption[];
+        const versionIdToName = new Map<string, string>();
+        options.forEach(opt => { if (opt?.id && opt?.version) versionIdToName.set(opt.id, opt.version); });
 
-      const moduleIds = modules.map(m => m.id);
-      
-      const testMatrix: Record<string, number> = {};
-      const versionTotals: Record<string, number> = {};
+        // Build the full version list from options and any versions present on test cases
+        const versionSet = new Set<string>();
+        options.forEach(opt => { if (opt.version) versionSet.add(opt.version); });
+        testCases.forEach(tc => {
+          const ver = (tc as any).version || (tc as any).productVersionName || (tc as any).productVersionId && versionIdToName.get((tc as any).productVersionId);
+          if (ver) versionSet.add(ver);
+        });
+        const versions = Array.from(versionSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-      // Initialize version totals with all found versions
-      versions.forEach(ver => versionTotals[ver] = 0);
+        // Initialize test matrix and version totals
+        const testMatrix: Record<string, Record<string, number>> = {};
+        const versionTotals: Record<string, number> = {};
 
-      // Also count unversioned test cases
-      versionTotals['Unversioned'] = 0;
+        versions.forEach(ver => {
+          versionTotals[ver] = 0;
+        });
 
-      for (const tc of testCases) {
-        if (moduleIds.includes(tc.moduleId)) {
-          const version = tc.version || 'Unversioned';
-          const key = `${tc.moduleId}-${version}`;
-          
-          testMatrix[key] = (testMatrix[key] || 0) + 1;
-          versionTotals[version] = (versionTotals[version] || 0) + 1;
-        }
-      }
+        modules.forEach(mod => {
+          if (!testMatrix[mod.id]) testMatrix[mod.id] = {};
+          versions.forEach(ver => { testMatrix[mod.id][ver] = 0; });
+        });
 
-      return {
-        modules,
-        versions: [...versions, 'Unversioned'], // Include unversioned in the list
-        testMatrix,
-        versionTotals
-      };
-    })
-  ).subscribe({
-    next: (data) => this.summaryData.set(data),
-    error: (err) => console.error('Error loading summary data:', err)
-  });
-}
+        // Count test cases per module per version (normalize version)
+        testCases.forEach(tc => {
+          const moduleId = (tc as any).moduleId;
+          const normalizedVersion = (tc as any).version || (tc as any).productVersionName || ((tc as any).productVersionId && versionIdToName.get((tc as any).productVersionId));
+          if (moduleId && normalizedVersion) {
+            if (!testMatrix[moduleId]) testMatrix[moduleId] = {};
+            if (typeof testMatrix[moduleId][normalizedVersion] !== 'number') testMatrix[moduleId][normalizedVersion] = 0;
+            testMatrix[moduleId][normalizedVersion]++;
+            versionTotals[normalizedVersion] = (versionTotals[normalizedVersion] || 0) + 1;
+          }
+        });
+
+        return {
+          modules,
+          versions,
+          testMatrix,
+          versionTotals
+        };
+      })
+    ).subscribe({
+      next: (data) => this.summaryData.set(data),
+      error: (err) => console.error('Error loading summary data:', err)
+    });
+  }
+
   private loadProduct(productId: string): void {
     this.productService.getProductById(productId).subscribe({
       next: (product) => this.currentProduct.set(product),
@@ -116,7 +126,7 @@ export class SummaryComponent {
 
   // Template helper methods
   getCount(modId: string, ver: string): number {
-    return this.testMatrix()[`${modId}-${ver}`] || 0;
+    return this.testMatrix()[modId]?.[ver] || 0;
   }
 
   getVersionTotal(ver: string): number {

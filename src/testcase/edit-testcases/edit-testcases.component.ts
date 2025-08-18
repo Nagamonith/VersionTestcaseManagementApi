@@ -622,7 +622,8 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
         continue;
       }
 
-      const attrValue = attr.get('value')?.value?.trim();
+      const rawValue = attr.get('value')?.value;
+      const attrValue = (rawValue ?? '').toString().trim();
       
       if (attrDef.isRequired && !attrValue) {
         return {
@@ -631,6 +632,7 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
         };
       }
 
+      // Number validation
       if (attrDef.type === 'number' && attrValue && isNaN(Number(attrValue))) {
         return {
           isValid: false,
@@ -638,10 +640,21 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
         };
       }
 
-      // Fix: Properly type check and handle options
-      if (Array.isArray(attrDef.options) && attrValue) {
-        const validOptions = attrDef.options.map((option: { value: string }) => option.value);
-        if (validOptions.length > 0 && !validOptions.includes(attrValue)) {
+      // Options validation: handle comma-separated string or JSON array of {value}
+      if (attrDef.options) {
+        let validOptions: string[] = [];
+        const opt = attrDef.options;
+        try {
+          const parsed = JSON.parse(opt as unknown as string);
+          if (Array.isArray(parsed)) {
+            // Accept array of strings or array of { value }
+            validOptions = parsed.map((item: any) => typeof item === 'string' ? item : item?.value).filter(Boolean);
+          }
+        } catch {
+          // Treat as comma-separated values
+          validOptions = (opt as unknown as string).split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (validOptions.length > 0 && attrValue && !validOptions.includes(attrValue)) {
           return {
             isValid: false,
             message: `Attribute "${attrDef.name}" has invalid value. Valid options are: ${validOptions.join(', ')}`
@@ -866,7 +879,19 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: () => {
         this.showAlertMessage(`Attribute ${attribute.id ? 'updated' : 'added'} successfully`, 'success');
+        // Reload attributes
         this.loadModuleAttributes(this.selectedModule());
+        // Sync attributes to all test cases in this module so columns/values appear
+        this.testCaseService.syncModuleAttributesToTestCases(this.selectedModule()).pipe(
+          takeUntil(this.destroy$),
+          catchError(err => {
+            console.error('Error syncing module attributes to testcases:', err);
+            return of(void 0);
+          })
+        ).subscribe(() => {
+          // Reload test cases to reflect new attributes
+          this.loadTestCases(this.selectedModule());
+        });
         this.currentModuleAttribute.set(null);
       },
       error: (error) => {
@@ -888,6 +913,14 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
       next: () => {
         this.showAlertMessage('Attribute deleted successfully', 'success');
         this.loadModuleAttributes(this.selectedModule());
+        // Sync removal to testcases and refresh
+        this.testCaseService.syncModuleAttributesToTestCases(this.selectedModule()).pipe(
+          takeUntil(this.destroy$),
+          catchError(err => {
+            console.error('Error syncing module attributes after delete:', err);
+            return of(void 0);
+          })
+        ).subscribe(() => this.loadTestCases(this.selectedModule()));
       },
       error: (error) => {
         console.error('Error deleting attribute:', error);
