@@ -1064,8 +1064,8 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
     const updatedTestCases = testCases.map((tc, index) => ({
       ...tc,
       result: formValues[index]?.result || 'Pending',
-      actual: formValues[index]?.actual || '',
-      remarks: formValues[index]?.remarks || '',
+      actual: (formValues[index]?.actual || '').trim(),
+      remarks: (formValues[index]?.remarks || '').trim(),
       uploads: this.uploads[index]?.map(u => u.url) || [],
       testRunId: this.showTestRuns ? this.selectedTestRunId() : undefined
     }));
@@ -1073,17 +1073,34 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
     const updateRequests = updatedTestCases.map(tc => {
       // When in suite/run context, update execution details against the suite
       if (this.showTestSuites || this.showTestRuns) {
-        const suiteId = this.showTestSuites ? (this.selectedModule() as string) : (tc as any).testSuiteIds?.[0];
+        // Resolve suiteId priority: explicit on case -> selected suite (suite mode) -> single selected suite (run mode) -> only suite in run
+        let suiteId: string | null = null;
+        const caseSuiteIds = (tc as any).testSuiteIds as string[] | undefined;
+        if (caseSuiteIds && caseSuiteIds.length > 0) {
+          suiteId = caseSuiteIds[0];
+        } else if (this.showTestSuites && this.selectedModule()) {
+          suiteId = this.selectedModule()!; // suite mode stores suite id here
+        } else if (this.showTestRuns) {
+          const selectedRun = this.selectedTestRun();
+          if (this.selectedSuiteIds.length === 1) {
+            suiteId = this.selectedSuiteIds[0];
+          } else if (selectedRun?.testSuites?.length === 1) {
+            suiteId = selectedRun.testSuites[0].id;
+          }
+        }
+
         if (!suiteId) {
+          console.warn('Skipping save: unable to resolve suiteId for test case', tc.id);
           return of(null);
         }
+
         return this.testSuiteService.updateExecutionDetails(suiteId, tc.id, {
           result: tc.result,
           actual: tc.actual,
           remarks: tc.remarks
         }).pipe(
           catchError(error => {
-            console.error('Failed to update execution details:', error);
+            console.error('Failed to update execution details:', { error, suiteId, testCaseId: tc.id });
             return of(null);
           })
         );
@@ -1127,7 +1144,12 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
         } else if (!this.showTestRuns) {
           this.loadTestCasesForModule(this.selectedModule()!, this.selectedVersion);
         } else if (this.showTestRuns && this.selectedTestRunId()) {
-          this.updateTestRunProgress();
+          // Refresh run view
+          if (this.selectedSuiteIds.length > 0) {
+            this.startTestingSelected();
+          } else {
+            this.viewAllSelectedCases();
+          }
         }
       }
     });
