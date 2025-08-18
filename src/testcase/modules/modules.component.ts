@@ -227,7 +227,74 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
       this.loadAllData();
     }
   }
-
+selectSuite(suiteId: string): void {
+  // If the same suite is clicked again, deselect it
+  if (this.selectedSuiteIds.includes(suiteId)) {
+    this.selectedSuiteIds = [];
+  } else {
+    // Select only this suite
+    this.selectedSuiteIds = [suiteId];
+  }
+  
+  // Automatically load the data for the selected suite
+  if (this.selectedSuiteIds.length > 0) {
+    this.loadSuiteData(suiteId);
+  } else {
+    this.versionTestCases.set([]);
+    this.showViewTestCases = false;
+    this.showStartTesting = false;
+  }
+}
+private loadSuiteData(suiteId: string): void {
+  this.isLoading.set(true);
+  
+  this.testSuiteService.getTestSuiteWithCases(suiteId)
+    .pipe(
+      catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId))),
+      switchMap(response => {
+        const items = response.testCases || [];
+        if (items.length === 0) return of([] as TestCase[]);
+        
+        return forkJoin(
+          items.map(tcItem => 
+            this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+              map(detail => {
+                const exec = tcItem.executionDetails || {} as any;
+                const overlaid: TestCaseDetailResponse = {
+                  ...detail,
+                  result: exec.result || detail.result,
+                  actual: exec.actual || detail.actual,
+                  remarks: exec.remarks || detail.remarks,
+                  executionDetails: exec,
+                  uploads: exec.uploads?.map((u: any) => u.filePath) || 
+                          (detail as any).attachments?.map((u: any) => u.filePath) || 
+                          detail.uploads || []
+                } as any;
+                return this.convertTestCaseDetailToTestCase(overlaid);
+              }),
+              catchError(() => of(null as unknown as TestCase))
+            )
+          )
+        ).pipe(
+          map(cases => (cases || []).filter(Boolean) as TestCase[])
+        );
+      }),
+      finalize(() => this.isLoading.set(false))
+    )
+    .subscribe({
+      next: cases => {
+        this.versionTestCases.set(cases);
+        this.ensureStepsForCases();
+        this.showViewTestCases = true;
+        this.showStartTesting = false;
+        this.initializeFormForTestCases();
+      },
+      error: err => {
+        console.error('Failed to load suite data:', err);
+        this.showAlertMessage('Failed to load suite data', 'error');
+      }
+    });
+} 
   private loadAllData(): void {
     this.isLoading.set(true);
     
@@ -730,25 +797,25 @@ onTestRunChange(runId: string): void {
     this.allSuitesSelected = false;
   }
 
-  toggleSelectAllSuites(event: Event): void {
-    const isChecked = (event.target as HTMLInputElement).checked;
-    this.allSuitesSelected = isChecked;
+  // toggleSelectAllSuites(event: Event): void {
+  //   const isChecked = (event.target as HTMLInputElement).checked;
+  //   this.allSuitesSelected = isChecked;
     
-    if (isChecked) {
-      this.selectedSuiteIds = this.selectedTestRun()?.testSuites.map(s => s.id) || [];
-    } else {
-      this.selectedSuiteIds = [];
-    }
-  }
+  //   if (isChecked) {
+  //     this.selectedSuiteIds = this.selectedTestRun()?.testSuites.map(s => s.id) || [];
+  //   } else {
+  //     this.selectedSuiteIds = [];
+  //   }
+  // }
 
-  areAllSuitesSelected(): boolean {
-    if (!this.selectedTestRun()?.testSuites?.length) return false;
-    return this.selectedSuiteIds.length === this.selectedTestRun()!.testSuites.length;
-  }
+  // areAllSuitesSelected(): boolean {
+  //   if (!this.selectedTestRun()?.testSuites?.length) return false;
+  //   return this.selectedSuiteIds.length === this.selectedTestRun()!.testSuites.length;
+  // }
 
-  hasSelectedSuites(): boolean {
-    return this.selectedSuiteIds.length > 0;
-  }
+ hasSelectedSuites(): boolean {
+  return this.selectedSuiteIds.length === 1;
+}
 
   // Suite status methods
   isSuiteComplete(suiteId: string): boolean {
@@ -863,74 +930,11 @@ hasTestCasesToView(): boolean {
   
   return false;
 }
-
-
-viewAllSelectedCases(): void {
-  const selectedRun = this.selectedTestRun();
-  if (!selectedRun) {
-    console.error('No test run selected');
-    return;
-  }
-
-  const suiteIds = this.selectedSuiteIds.length > 0
-    ? this.selectedSuiteIds
-    : (selectedRun.testSuites || []).map(s => s.id);
-
-  if (!suiteIds || suiteIds.length === 0) {
-    this.versionTestCases.set([]);
-    return;
-  }
-
-  const requests = suiteIds.map(suiteId => 
-    this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
-      catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId)))
-    )
-  );
-
-  forkJoin(requests).pipe(
-    switchMap((responses: TestSuiteWithCasesResponse[]) => {
-      const detailRequests = responses.flatMap(response => {
-        const items = response.testCases || [];
-        return items.map(tcItem => 
-          this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
-            map(detail => {
-              const exec = tcItem.executionDetails || {} as any;
-              const overlaid: TestCaseDetailResponse = {
-                ...detail,
-                result: exec.result || detail.result,
-                actual: exec.actual || detail.actual,
-                remarks: exec.remarks || detail.remarks,
-                executionDetails: exec,
-                uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
-              } as any;
-              return this.convertTestCaseDetailToTestCase(overlaid);
-            }),
-            catchError(() => of(null as unknown as TestCase))
-          )
-        );
-      });
-      return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
-    }),
-    map(allCases => (allCases || []).filter(Boolean) as TestCase[])
-  ).subscribe({
-    next: allCases => {
-      this.versionTestCases.set(allCases);
-      this.ensureStepsForCases();
-      this.showViewTestCases = true;
-      this.showStartTesting = false;
-      this.initializeFormForTestCases();
-    },
-    error: err => {
-      console.error('Failed to load test cases:', err);
-      this.versionTestCases.set([]);
-    }
-  });
-}
-// Create a helper function for empty test suite response
+// Add this helper method to your component class
 private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse {
   return {
     id: suiteId || '',
-    productId: this.selectedProductId() || '', // Use selectedProductId() instead
+    productId: this.selectedProductId() || '',
     name: 'Error loading suite',
     description: '',
     isActive: false,
@@ -940,67 +944,276 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
   };
 }
 
-  startTestingSelected(): void {
+viewAllSelectedCases(): void {
   const selectedRun = this.selectedTestRun();
   if (!selectedRun) {
     console.error('No test run selected');
     return;
   }
 
-  const suiteIds = this.selectedSuiteIds.length > 0
-    ? this.selectedSuiteIds
-    : (selectedRun.testSuites || []).map(s => s.id);
+  // With single selection, we either have one suite selected or none
+  const suiteId = this.selectedSuiteIds.length > 0 ? this.selectedSuiteIds[0] : null;
 
-  if (!suiteIds || suiteIds.length === 0) {
+  if (!suiteId) {
     this.versionTestCases.set([]);
+    this.showViewTestCases = false;
     return;
   }
 
-  const requests = suiteIds.map(suiteId => 
-    this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
-      catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId)))
-    )
-  );
-
-  forkJoin(requests).pipe(
-    switchMap((responses: TestSuiteWithCasesResponse[]) => {
-      const detailRequests = responses.flatMap(response => {
+  this.isLoading.set(true);
+  
+  this.testSuiteService.getTestSuiteWithCases(suiteId)
+    .pipe(
+      catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId))),
+      switchMap((response: TestSuiteWithCasesResponse) => {
         const items = response.testCases || [];
-        return items.map(tcItem => 
-          this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
-            map(detail => {
-              const exec = tcItem.executionDetails || {} as any;
-              const overlaid: TestCaseDetailResponse = {
-                ...detail,
-                result: exec.result || detail.result,
-                actual: exec.actual || detail.actual,
-                remarks: exec.remarks || detail.remarks,
-                executionDetails: exec,
-                uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
-              } as any;
-              return this.convertTestCaseDetailToTestCase(overlaid);
-            }),
-            catchError(() => of(null as unknown as TestCase))
+        if (items.length === 0) return of([] as TestCase[]);
+        
+        return forkJoin(
+          items.map((tcItem: any) => 
+            this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+              map((detail: TestCaseDetailResponse) => {
+                const exec = tcItem.executionDetails || {} as any;
+                const overlaid: TestCaseDetailResponse = {
+                  ...detail,
+                  result: exec.result || detail.result,
+                  actual: exec.actual || detail.actual,
+                  remarks: exec.remarks || detail.remarks,
+                  executionDetails: exec,
+                  uploads: exec.uploads?.map((u: any) => u.filePath) || 
+                          (detail as any).attachments?.map((u: any) => u.filePath) || 
+                          detail.uploads || []
+                } as any;
+                return this.convertTestCaseDetailToTestCase(overlaid);
+              }),
+              catchError(() => of(null as unknown as TestCase))
+            )
           )
+        ).pipe(
+          map((cases: (TestCase | null)[]) => (cases || []).filter(Boolean) as TestCase[])
         );
-      });
-      return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
-    }),
-    map(allCases => (allCases || []).filter(Boolean) as TestCase[])
-  ).subscribe({
-    next: allCases => {
-      this.versionTestCases.set(allCases);
-      this.ensureStepsForCases();
-      this.showStartTesting = true;
-      this.showViewTestCases = false;
-      this.initializeFormForTestCases();
-    },
-    error: err => {
-      console.error('Failed to load test cases:', err);
-      this.versionTestCases.set([]);
-    }
-  });
+      }),
+      finalize(() => this.isLoading.set(false))
+    )
+    .subscribe({
+      next: (cases: TestCase[]) => {
+        this.versionTestCases.set(cases);
+        this.ensureStepsForCases();
+        this.showViewTestCases = true;
+        this.showStartTesting = false;
+        this.initializeFormForTestCases();
+      },
+      error: (err: any) => {
+        console.error('Failed to load test cases:', err);
+        this.versionTestCases.set([]);
+        this.showAlertMessage('Failed to load test cases', 'error');
+      }
+    });
 }
+
+startTestingSelected(): void {
+  const selectedRun = this.selectedTestRun();
+  if (!selectedRun) {
+    console.error('No test run selected');
+    return;
+  }
+
+  // With single selection, we either have one suite selected or none
+  const suiteId = this.selectedSuiteIds.length > 0 ? this.selectedSuiteIds[0] : null;
+
+  if (!suiteId) {
+    this.versionTestCases.set([]);
+    this.showStartTesting = false;
+    return;
+  }
+
+  this.isLoading.set(true);
+  
+  this.testSuiteService.getTestSuiteWithCases(suiteId)
+    .pipe(
+      catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId))),
+      switchMap((response: TestSuiteWithCasesResponse) => {
+        const items = response.testCases || [];
+        if (items.length === 0) return of([] as TestCase[]);
+        
+        return forkJoin(
+          items.map((tcItem: any) => 
+            this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+              map((detail: TestCaseDetailResponse) => {
+                const exec = tcItem.executionDetails || {} as any;
+                const overlaid: TestCaseDetailResponse = {
+                  ...detail,
+                  result: exec.result || detail.result,
+                  actual: exec.actual || detail.actual,
+                  remarks: exec.remarks || detail.remarks,
+                  executionDetails: exec,
+                  uploads: exec.uploads?.map((u: any) => u.filePath) || 
+                          (detail as any).attachments?.map((u: any) => u.filePath) || 
+                          detail.uploads || []
+                } as any;
+                return this.convertTestCaseDetailToTestCase(overlaid);
+              }),
+              catchError(() => of(null as unknown as TestCase))
+            )
+          )
+        ).pipe(
+          map((cases: (TestCase | null)[]) => (cases || []).filter(Boolean) as TestCase[])
+        );
+      }),
+      finalize(() => this.isLoading.set(false))
+    )
+    .subscribe({
+      next: (cases: TestCase[]) => {
+        this.versionTestCases.set(cases);
+        this.ensureStepsForCases();
+        this.showStartTesting = true;
+        this.showViewTestCases = false;
+        this.initializeFormForTestCases();
+      },
+      error: (err: any) => {
+        console.error('Failed to load test cases:', err);
+        this.versionTestCases.set([]);
+        this.showAlertMessage('Failed to load test cases', 'error');
+      }
+    });
+}
+
+// viewAllSelectedCases(): void {
+//   const selectedRun = this.selectedTestRun();
+//   if (!selectedRun) {
+//     console.error('No test run selected');
+//     return;
+//   }
+
+//   const suiteIds = this.selectedSuiteIds.length > 0
+//     ? this.selectedSuiteIds
+//     : (selectedRun.testSuites || []).map(s => s.id);
+
+//   if (!suiteIds || suiteIds.length === 0) {
+//     this.versionTestCases.set([]);
+//     return;
+//   }
+
+//   const requests = suiteIds.map(suiteId => 
+//     this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+//       catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId)))
+//     )
+//   );
+
+//   forkJoin(requests).pipe(
+//     switchMap((responses: TestSuiteWithCasesResponse[]) => {
+//       const detailRequests = responses.flatMap(response => {
+//         const items = response.testCases || [];
+//         return items.map(tcItem => 
+//           this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+//             map(detail => {
+//               const exec = tcItem.executionDetails || {} as any;
+//               const overlaid: TestCaseDetailResponse = {
+//                 ...detail,
+//                 result: exec.result || detail.result,
+//                 actual: exec.actual || detail.actual,
+//                 remarks: exec.remarks || detail.remarks,
+//                 executionDetails: exec,
+//                 uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
+//               } as any;
+//               return this.convertTestCaseDetailToTestCase(overlaid);
+//             }),
+//             catchError(() => of(null as unknown as TestCase))
+//           )
+//         );
+//       });
+//       return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
+//     }),
+//     map(allCases => (allCases || []).filter(Boolean) as TestCase[])
+//   ).subscribe({
+//     next: allCases => {
+//       this.versionTestCases.set(allCases);
+//       this.ensureStepsForCases();
+//       this.showViewTestCases = true;
+//       this.showStartTesting = false;
+//       this.initializeFormForTestCases();
+//     },
+//     error: err => {
+//       console.error('Failed to load test cases:', err);
+//       this.versionTestCases.set([]);
+//     }
+//   });
+// }
+// // Create a helper function for empty test suite response
+// private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse {
+//   return {
+//     id: suiteId || '',
+//     productId: this.selectedProductId() || '', // Use selectedProductId() instead
+//     name: 'Error loading suite',
+//     description: '',
+//     isActive: false,
+//     createdAt: new Date(),
+//     updatedAt: new Date(),
+//     testCases: []
+//   };
+// }
+
+//   startTestingSelected(): void {
+//   const selectedRun = this.selectedTestRun();
+//   if (!selectedRun) {
+//     console.error('No test run selected');
+//     return;
+//   }
+
+//   const suiteIds = this.selectedSuiteIds.length > 0
+//     ? this.selectedSuiteIds
+//     : (selectedRun.testSuites || []).map(s => s.id);
+
+//   if (!suiteIds || suiteIds.length === 0) {
+//     this.versionTestCases.set([]);
+//     return;
+//   }
+
+//   const requests = suiteIds.map(suiteId => 
+//     this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+//       catchError(() => of(this.getEmptyTestSuiteWithCases(suiteId)))
+//     )
+//   );
+
+//   forkJoin(requests).pipe(
+//     switchMap((responses: TestSuiteWithCasesResponse[]) => {
+//       const detailRequests = responses.flatMap(response => {
+//         const items = response.testCases || [];
+//         return items.map(tcItem => 
+//           this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+//             map(detail => {
+//               const exec = tcItem.executionDetails || {} as any;
+//               const overlaid: TestCaseDetailResponse = {
+//                 ...detail,
+//                 result: exec.result || detail.result,
+//                 actual: exec.actual || detail.actual,
+//                 remarks: exec.remarks || detail.remarks,
+//                 executionDetails: exec,
+//                 uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
+//               } as any;
+//               return this.convertTestCaseDetailToTestCase(overlaid);
+//             }),
+//             catchError(() => of(null as unknown as TestCase))
+//           )
+//         );
+//       });
+//       return detailRequests.length ? forkJoin(detailRequests) : of([] as TestCase[]);
+//     }),
+//     map(allCases => (allCases || []).filter(Boolean) as TestCase[])
+//   ).subscribe({
+//     next: allCases => {
+//       this.versionTestCases.set(allCases);
+//       this.ensureStepsForCases();
+//       this.showStartTesting = true;
+//       this.showViewTestCases = false;
+//       this.initializeFormForTestCases();
+//     },
+//     error: err => {
+//       console.error('Failed to load test cases:', err);
+//       this.versionTestCases.set([]);
+//     }
+//   });
+// }
 
   private initializeFormForTestCases(): void {
   this.formArray.clear();

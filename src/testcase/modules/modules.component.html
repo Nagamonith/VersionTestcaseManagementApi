@@ -111,7 +111,7 @@
     </label>
   </div> -->
 
-  <div class="suite-cards">
+  <!-- <div class="suite-cards">
     <div *ngFor="let suiteRef of selectedTestRun()?.testSuites"
          class="suite-card"
          [class.selected]="isSuiteSelected(suiteRef.id)">
@@ -124,7 +124,7 @@
           <h5>{{ suiteRef.name }}</h5>
         </label>
 
-        <!-- Status indicators -->
+        Status indicators
         <span *ngIf="isSuiteComplete(suiteRef.id)" class="status-badge complete" title="All test cases completed">
          
         </span>
@@ -144,7 +144,42 @@
         </small>
       </div>
     </div>
+  </div> -->
+  <!-- In the suite-cards section, replace the checkbox with a radio button -->
+<div class="suite-cards">
+  <div *ngFor="let suiteRef of selectedTestRun()?.testSuites"
+       class="suite-card"
+       [class.selected]="isSuiteSelected(suiteRef.id)">
+    <div class="suite-header">
+      <input type="radio"
+             [id]="'suite-' + suiteRef.id"
+             [checked]="isSuiteSelected(suiteRef.id)"
+             (change)="selectSuite(suiteRef.id)">
+      <label [for]="'suite-' + suiteRef.id">
+        <h5>{{ suiteRef.name }}</h5>
+      </label>
+
+      <!-- Status indicators -->
+      <span *ngIf="isSuiteComplete(suiteRef.id)" class="status-badge complete" title="All test cases completed">
+       
+      </span>
+      <span *ngIf="isSuiteInProgress(suiteRef.id)" class="status-badge in-progress" title="Test cases in progress">
+        
+      </span>
+      <span *ngIf="isSuiteNotStarted(suiteRef.id)" class="status-badge not-started" title="Not started">
+        
+      </span>
+    </div>
+
+    <p>{{ getSuiteDescription(suiteRef.id) || 'No description available' }}</p>
+    <div class="suite-stats">
+      <small>{{ getSuiteTestCaseCount(suiteRef.id) }} total test cases</small>
+      <small *ngIf="getSuiteCompletedCount(suiteRef.id) > 0">
+        {{ getSuiteCompletedCount(suiteRef.id) }} completed
+      </small>
+    </div>
   </div>
+</div>
 </div>
 
 <!-- View Test Cases Section -->
