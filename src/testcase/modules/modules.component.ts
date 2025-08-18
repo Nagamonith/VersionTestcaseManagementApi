@@ -286,6 +286,25 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
         map((responses: TestSuiteResponse[]) => 
           responses.map(res => this.convertTestSuiteResponseToTestSuite(res))
         ),
+        switchMap((suites: TestSuite[]) => {
+          if (!suites || suites.length === 0) {
+            return of([] as TestSuite[]);
+          }
+          // Fetch counts for each suite
+          const countRequests = suites.map(suite =>
+            this.testSuiteService.getTestSuiteWithCases(suite.id).pipe(
+              map(resp => ({ id: suite.id, count: (resp.testCases || []).length })),
+              catchError(() => of({ id: suite.id, count: 0 }))
+            )
+          );
+          return forkJoin(countRequests).pipe(
+            map(counts => {
+              const idToCount = new Map<string, number>();
+              counts.forEach(c => idToCount.set(c.id, c.count));
+              return suites.map(s => ({ ...s, testCases: new Array(idToCount.get(s.id) || 0) as any }));
+            })
+          );
+        }),
         tap(suites => {
           console.log('Loaded test suites:', suites);
           this.testSuites.set(suites);
@@ -770,7 +789,7 @@ onTestRunChange(runId: string): void {
     if (suite) {
       this.showViewTestCases = true;
       this.showStartTesting = false;
-      this.loadTestCasesForSuite(suite.id);
+      this.loadTestCasesForSuite(suite.id); // ensure steps/expected are fetched
     }
   } else {
     this.showViewTestCases = true;
@@ -989,7 +1008,7 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
   console.log('Form array length after initialization:', this.formArray.length);
   console.log('Form array controls:', this.formArray.controls);
 
-  // Re-extract attributes after loading new test cases
+  // Re-extract attributes after loading new test cases based on current set only
   this.extractAvailableAttributes();
   this.initializeAttributeColumns();
 
