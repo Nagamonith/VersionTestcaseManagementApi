@@ -1,6 +1,6 @@
-// test-suite.model.ts
-import { TestCase, TestCaseResponse } from "./test-case.model";
-import { ExecutionDetails, TestSuiteTestCase } from "./test-case.model";
+// Updated test-suite.model.ts with proper interfaces
+
+import { TestCase, TestCaseResponse, ExecutionDetails } from "./test-case.model";
 
 export interface TestSuite {
   id: string;
@@ -24,12 +24,21 @@ export interface TestSuiteResponse {
   testCases?: TestCaseResponse[];
 }
 
-export interface TestSuiteWithCasesResponse extends TestSuiteResponse {
-  testCases?: Array<TestCaseResponse & {
-    executionDetails?: ExecutionDetails;
-  }>;
+// Enhanced interface for test suite with test case items
+export interface TestSuiteTestCaseItem {
+  testCase: TestCaseResponse;
+  executionDetails?: ExecutionDetails;
 }
-
+export interface TestSuiteWithCasesResponse extends Omit<TestSuiteResponse, 'testCases'> {
+  id: string;
+  productId: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+  testCases: TestSuiteTestCaseItem[];
+}
 export interface CreateTestSuiteRequest {
   name: string;
   description?: string;
@@ -49,14 +58,17 @@ export interface TestSuiteExecutionResponse {
   status: 'NotStarted' | 'InProgress' | 'Completed';
 }
 
+export interface TestSuiteTestCase {
+  id: number;
+  testSuiteId: string;
+  testCase: TestCase;
+  executionDetails: ExecutionDetails;
+}
+
 export interface UpdateTestSuiteExecutionRequest {
   status?: 'NotStarted' | 'InProgress' | 'Completed';
   completedAt?: Date;
 }
-
-export type { TestCase };
-
-/* ************** EXECUTION SPECIFIC INTERFACES ************** */
 
 export interface TestSuiteExecutionSummary {
   totalTestCases: number;
@@ -74,3 +86,6 @@ export interface TestSuiteExecutionHistoryItem {
   status: 'NotStarted' | 'InProgress' | 'Completed';
   summary: TestSuiteExecutionSummary;
 }
+
+// Export TestCase type for convenience
+export type { TestCase };

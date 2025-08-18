@@ -8,16 +8,12 @@ import {
   CreateTestSuiteRequest, 
   AssignTestCasesRequest, 
   TestSuiteWithCasesResponse,
-  TestSuiteExecutionResponse,
-  UpdateTestSuiteExecutionRequest,
-  TestSuiteExecutionSummary
+  TestSuiteTestCaseItem
 } from 'src/app/shared/modles/test-suite.model';
 import { 
   TestCaseDetailResponse, 
   TestCaseResponse,
-  ExecutionDetails,
-  UpdateExecutionDetailsRequest,
-  AddExecutionUploadRequest
+  ExecutionDetails
 } from 'src/app/shared/modles/test-case.model';
 import { AlertComponent } from 'src/app/shared/alert/alert.component';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -32,7 +28,8 @@ import {
   switchMap, 
   finalize, 
   Observable, 
-  EMPTY 
+  EMPTY,
+  throwError
 } from 'rxjs';
 
 @Component({
@@ -55,7 +52,7 @@ export class TestSuiteComponent {
   selectedModuleId = '';
 
   // State signals
-  mode = signal<'list' | 'add' | 'edit' | 'execute'>('list');
+  mode = signal<'list' | 'add' | 'edit'>('list');
   selectedSuiteId = signal<string>('');
   selectedTestCases = signal<TestCaseDetailResponse[]>([]);
   testSuites = signal<TestSuiteResponse[]>([]);
@@ -63,10 +60,8 @@ export class TestSuiteComponent {
   modules = signal<ProductModule[]>([]);
   availableTestCases = signal<TestCaseDetailResponse[]>([]);
 
-  // Execution state
-  currentExecution = signal<TestSuiteExecutionResponse | null>(null);
-  executionSummary = signal<TestSuiteExecutionSummary | null>(null);
-  executionDetails = signal<Record<string, ExecutionDetails>>({});
+  // Enhanced test suite data with test case counts
+  testSuitesWithCounts = signal<(TestSuiteResponse & { testCaseCount: number })[]>([]);
 
   // Alert signals
   showAlert = signal(false);
@@ -81,7 +76,6 @@ export class TestSuiteComponent {
   isLoadingTestCases = signal(false);
   isSaving = signal(false);
   isDeleting = signal(false);
-  isExecuting = signal(false);
 
   constructor() {
     this.route.queryParamMap.subscribe(params => {
@@ -104,19 +98,46 @@ export class TestSuiteComponent {
     }
 
     this.isLoadingSuites.set(true);
+    
+    // First get the basic test suites
     this.testSuiteService.getTestSuites(this.currentProductId()).pipe(
-      tap((suites) => {
-        console.log('Loaded test suites:', suites);
-        this.testSuites.set(suites || []);
-        this.isLoadingSuites.set(false);
+      switchMap(suites => {
+        if (!suites || suites.length === 0) {
+          return of([]);
+        }
+
+        // For each suite, get the test cases count
+        const suiteRequests = suites.map(suite => 
+          this.testSuiteService.getTestSuiteWithCases(suite.id!).pipe(
+            map(suiteWithCases => ({
+              ...suite,
+              testCaseCount: suiteWithCases?.testCases?.length || 0
+            })),
+            catchError(error => {
+              console.error(`Error loading test cases for suite ${suite.id}:`, error);
+              return of({
+                ...suite,
+                testCaseCount: 0
+              });
+            })
+          )
+        );
+
+        return forkJoin(suiteRequests);
+      }),
+      tap((suitesWithCounts) => {
+        console.log('Loaded test suites with counts:', suitesWithCounts);
+        this.testSuites.set(suitesWithCounts.map(s => ({ ...s })));
+        this.testSuitesWithCounts.set(suitesWithCounts);
       }),
       catchError(err => {
         console.error('Failed to load test suites:', err);
         this.showAlertMessage('Failed to load test suites: ' + (err.message || 'Unknown error'), 'error');
-        this.isLoadingSuites.set(false);
         this.testSuites.set([]);
+        this.testSuitesWithCounts.set([]);
         return of([]);
-      })
+      }),
+      finalize(() => this.isLoadingSuites.set(false))
     ).subscribe();
   }
 
@@ -131,15 +152,14 @@ export class TestSuiteComponent {
       tap((modules) => {
         console.log('Loaded modules:', modules);
         this.modules.set(modules || []);
-        this.isLoadingModules.set(false);
       }),
       catchError(err => {
         console.error('Failed to load modules:', err);
         this.showAlertMessage('Failed to load modules: ' + (err.message || 'Unknown error'), 'error');
-        this.isLoadingModules.set(false);
         this.modules.set([]);
         return of([]);
-      })
+      }),
+      finalize(() => this.isLoadingModules.set(false))
     ).subscribe();
   }
 
@@ -157,75 +177,82 @@ export class TestSuiteComponent {
     this.selectedSuiteId.set('');
   }
 
-  startEditSuite(suiteId: string): void {
-    if (!suiteId) {
-      this.showAlertMessage('Invalid test suite ID', 'error');
-      return;
-    }
 
-    this.isLoadingSuites.set(true);
-    this.selectedSuiteId.set(suiteId);
-    this.mode.set('edit');
-
-    console.log('Starting edit for suite:', suiteId);
-
-    // First get the basic suite info
-    this.testSuiteService.getTestSuiteById(this.currentProductId(), suiteId).pipe(
-      tap(suite => {
-        if (suite) {
-          console.log('Loaded suite info:', suite);
-          this.suiteName = suite.name || '';
-          this.suiteDescription = suite.description || '';
-        }
-      }),
-      switchMap(() => {
-        // Then get the test cases for this suite
-        return this.testSuiteService.getTestSuiteWithCases(suiteId);
-      }),
-      tap((suiteWithCases: TestSuiteWithCasesResponse) => {
-        console.log('Loaded suite with cases:', suiteWithCases);
-        
-        if (suiteWithCases?.testCases && suiteWithCases.testCases.length > 0) {
-          // Convert TestCaseResponse to TestCaseDetailResponse
-          const detailedTestCases: TestCaseDetailResponse[] = suiteWithCases.testCases.map(tc => {
-            const detailedTc: TestCaseDetailResponse = {
-              ...tc,
-              steps: [],
-              expected: [],
-              attributes: [],
-              uploads: [],
-              testSuiteIds: [suiteId]
-            };
-            return detailedTc;
-          });
-          
-          console.log('Converted test cases:', detailedTestCases);
-          this.selectedTestCases.set(detailedTestCases);
-          
-          // Set the module if we have test cases
-          if (detailedTestCases.length > 0 && detailedTestCases[0].moduleId) {
-            this.selectedModuleId = detailedTestCases[0].moduleId;
-            console.log('Set module ID:', this.selectedModuleId);
-            
-            // Load available test cases for the module
-            this.loadTestCasesForModule(this.selectedModuleId);
-          }
-        } else {
-          console.log('No test cases found for this suite');
-          this.selectedTestCases.set([]);
-        }
-        
-        this.isLoadingSuites.set(false);
-      }),
-      catchError(err => {
-        console.error('Failed to load test suite for editing:', err);
-        this.showAlertMessage('Failed to load test suite details: ' + (err.message || 'Unknown error'), 'error');
-        this.isLoadingSuites.set(false);
-        this.mode.set('list');
-        return of(null);
-      })
-    ).subscribe();
+startEditSuite(suiteId: string): void {
+  if (!suiteId) {
+    this.showAlertMessage('Invalid test suite ID', 'error');
+    return;
   }
+
+  this.isLoadingSuites.set(true);
+  this.selectedSuiteId.set(suiteId);
+  this.mode.set('edit');
+
+  forkJoin([
+    this.testSuiteService.getTestSuiteById(this.currentProductId(), suiteId),
+    this.testSuiteService.getTestSuiteWithCases(suiteId)
+  ]).pipe(
+    tap(([suite, suiteWithCases]) => {
+      console.log('Editing suite:', suite);
+      console.log('Suite with cases:', suiteWithCases);
+      
+      this.suiteName = suite.name || '';
+      this.suiteDescription = suite.description || '';
+
+      const testCases = suiteWithCases?.testCases || [];
+      console.log('Processing test cases:', testCases);
+
+      if (testCases.length > 0) {
+        const mappedTestCases = testCases.map((item: TestSuiteTestCaseItem) => {
+          const baseTestCase = item.testCase;
+          const execDetails = item.executionDetails || {};
+          
+          return {
+            id: baseTestCase.id,
+            moduleId: baseTestCase.moduleId,
+            productVersionId: baseTestCase.productVersionId,
+            version: baseTestCase.version || baseTestCase.productVersionName,
+            productVersionName: baseTestCase.productVersionName || baseTestCase.version,
+            testCaseId: baseTestCase.testCaseId,
+            useCase: baseTestCase.useCase,
+            scenario: baseTestCase.scenario,
+            testType: baseTestCase.testType,
+            testTool: baseTestCase.testTool,
+            result: execDetails.result || baseTestCase.result,
+            actual: execDetails.actual,
+            remarks: execDetails.remarks,
+            createdAt: baseTestCase.createdAt,
+            updatedAt: baseTestCase.updatedAt,
+            steps: [],
+            expected: [],
+            attributes: [],
+            uploads: execDetails.uploads?.map(u => u.filePath) || [],
+            testSuiteIds: [suiteId],
+            executionDetails: execDetails
+          } as TestCaseDetailResponse;
+        });
+
+        console.log('Mapped test cases:', mappedTestCases);
+        this.selectedTestCases.set(mappedTestCases);
+
+        const firstTestCase = mappedTestCases[0];
+        if (firstTestCase?.moduleId) {
+          this.selectedModuleId = firstTestCase.moduleId;
+          this.loadTestCasesForModule(this.selectedModuleId);
+        }
+      } else {
+        this.selectedTestCases.set([]);
+      }
+    }),
+    catchError(err => {
+      console.error('Failed to load test suite for editing:', err);
+      this.showAlertMessage('Failed to load test suite: ' + (err.message || 'Unknown error'), 'error');
+      this.mode.set('list');
+      return of(null);
+    }),
+    finalize(() => this.isLoadingSuites.set(false))
+  ).subscribe();
+}
 
   cancelEdit(): void {
     this.mode.set('list');
@@ -243,6 +270,28 @@ export class TestSuiteComponent {
     }
   }
 
+  private loadTestCasesForModule(moduleId: string): void {
+    if (!moduleId) return;
+
+    this.isLoadingTestCases.set(true);
+    this.availableTestCases.set([]);
+
+    this.testCaseService.getTestCaseDetailByModule(moduleId, this.currentProductId()).pipe(
+      tap(testCases => {
+        console.log('Loaded test cases for module:', testCases);
+        this.availableTestCases.set(testCases || []);
+      }),
+      catchError(err => {
+        console.error('Failed to load test cases:', err);
+        this.showAlertMessage('Failed to load test cases: ' + (err.message || 'Unknown error'), 'error');
+        this.availableTestCases.set([]);
+        return of([]);
+      }),
+      finalize(() => this.isLoadingTestCases.set(false))
+    ).subscribe();
+  }
+
+  // Track functions
   trackBySuiteId(index: number, suite: TestSuiteResponse): string {
     return suite.id || index.toString();
   }
@@ -255,6 +304,7 @@ export class TestSuiteComponent {
     return testCase.id || index.toString();
   }
 
+  // Test case selection methods
   areAllTestCasesSelected(): boolean {
     const available = this.availableTestCases();
     const selected = this.selectedTestCases();
@@ -296,108 +346,40 @@ export class TestSuiteComponent {
     }
   }
 
-  private loadTestCasesForModule(moduleId: string): void {
-    if (!moduleId || !moduleId.trim()) {
-      console.log('No module ID provided for loading test cases');
-      return;
-    }
-    
-    console.log('Loading test cases for module:', moduleId);
-    this.isLoadingTestCases.set(true);
-    
-    this.testCaseService.getTestCasesByModule(moduleId).pipe(
-      switchMap(testCases => {
-        console.log('Basic test cases loaded:', testCases);
-        
-        if (!testCases || testCases.length === 0) {
-          console.log('No test cases found for module');
-          return of([]);
-        }
-        
-        // Get detailed information for each test case
-        const detailRequests = testCases.map(tc => 
-          this.testCaseService.getTestCaseDetail(moduleId, tc.id!).pipe(
-            catchError(err => {
-              console.error(`Failed to load details for test case ${tc.id}:`, err);
-              // Return a basic TestCaseDetailResponse if detailed loading fails
-              const basicDetail: TestCaseDetailResponse = {
-                ...tc,
-                steps: [],
-                expected: [],
-                attributes: [],
-                uploads: [],
-                testSuiteIds: []
-              };
-              return of(basicDetail);
-            })
-          )
-        );
-        
-        return forkJoin(detailRequests).pipe(
-          map(details => details.filter(d => d !== null) as TestCaseDetailResponse[]
-        ));
-      }),
-      tap((testCases) => {
-        console.log('Detailed test cases loaded:', testCases);
-        this.availableTestCases.set(testCases);
-        this.isLoadingTestCases.set(false);
-      }),
-      catchError(err => {
-        console.error('Failed to load test cases for module:', err);
-        this.showAlertMessage('Failed to load test cases: ' + (err.message || 'Unknown error'), 'error');
-        this.isLoadingTestCases.set(false);
-        this.availableTestCases.set([]);
-        return of([]);
-      })
-    ).subscribe();
-  }
-
   handleCheckboxChange(testCase: TestCaseDetailResponse, event: Event): void {
     const target = event.target as HTMLInputElement;
     if (!target) return;
     
     const isChecked = target.checked;
-    console.log('Checkbox changed for test case:', testCase.id, 'checked:', isChecked);
     this.toggleTestCaseSelection(testCase, isChecked);
   }
 
   toggleTestCaseSelection(testCase: TestCaseDetailResponse, isChecked: boolean): void {
-    if (!testCase || !testCase.id) {
-      console.error('Invalid test case for selection toggle');
-      return;
-    }
-
-    if (isChecked) {
-      // Add if not already selected
-      if (!this.isTestCaseSelected(testCase)) {
-        console.log('Adding test case to selection:', testCase.id);
-        this.selectedTestCases.update(current => [...current, testCase]);
+    this.selectedTestCases.update(current => {
+      if (isChecked) {
+        return current.some(tc => tc.id === testCase.id) 
+          ? current 
+          : [...current, testCase];
+      } else {
+        return current.filter(tc => tc.id !== testCase.id);
       }
-    } else {
-      // Remove if selected
-      console.log('Removing test case from selection:', testCase.id);
-      this.selectedTestCases.update(current => 
-        current.filter(tc => tc.id !== testCase.id)
-      );
-    }
-    
-    console.log('Current selected test cases:', this.selectedTestCases().map(tc => tc.id));
+    });
   }
 
   isTestCaseSelected(testCase: TestCaseDetailResponse): boolean {
-    if (!testCase || !testCase.id) return false;
+    if (!testCase?.id) return false;
     return this.selectedTestCases().some(tc => tc.id === testCase.id);
   }
 
   removeSelectedTestCase(testCaseId: string): void {
     if (!testCaseId) return;
     
-    console.log('Removing selected test case:', testCaseId);
     this.selectedTestCases.update(current =>
       current.filter(tc => tc.id !== testCaseId)
     );
   }
 
+  // Save functionality
   saveTestSuite(): void {
     // Validation
     if (!this.suiteName.trim()) {
@@ -433,7 +415,6 @@ export class TestSuiteComponent {
         console.log('Test suite created successfully:', response);
         
         if (response?.id && this.selectedTestCases().length > 0) {
-          console.log('Assigning test cases to new suite:', this.selectedTestCases().map(tc => tc.id));
           return this.assignTestCasesToSuite(response.id).pipe(
             map(() => response),
             catchError(err => {
@@ -454,24 +435,19 @@ export class TestSuiteComponent {
           this.loadTestSuites();
           setTimeout(() => this.cancelEdit(), 1500);
         }
-        this.isSaving.set(false);
       }),
       catchError(err => {
         console.error('Failed to create test suite:', err);
         this.showAlertMessage('Failed to create test suite: ' + (err.message || 'Unknown error'), 'error');
-        this.isSaving.set(false);
         return of(null);
-      })
+      }),
+      finalize(() => this.isSaving.set(false))
     ).subscribe();
   }
 
   private updateTestSuite(): void {
     const suiteId = this.selectedSuiteId();
-    if (!suiteId) {
-      this.showAlertMessage('Invalid test suite ID for update', 'error');
-      this.isSaving.set(false);
-      return;
-    }
+    if (!suiteId) return;
 
     const request: CreateTestSuiteRequest = {
       name: this.suiteName.trim(),
@@ -479,36 +455,29 @@ export class TestSuiteComponent {
       isActive: true
     };
 
-    console.log('Updating test suite with request:', request);
-
+    // First update the suite info
     this.testSuiteService.updateTestSuite(this.currentProductId(), suiteId, request).pipe(
       switchMap(() => {
-        console.log('Test suite updated, now handling test case assignments');
+        // Then handle test case assignments
+        const testCaseIds = this.selectedTestCases()
+          .map(tc => tc.id)
+          .filter(id => id && id.trim() !== '') as string[];
         
-        // For updates, we need to clear existing assignments and add new ones
-        if (this.selectedTestCases().length > 0) {
-          return this.assignTestCasesToSuite(suiteId).pipe(
-            catchError(err => {
-              console.error('Failed to assign test cases during update:', err);
-              this.showAlertMessage('Test suite updated but failed to assign some test cases: ' + (err.message || 'Unknown error'), 'warning');
-              return of(null);
-            })
-          );
-        }
-        return of(null);
+        console.log('Updating test suite with test case IDs:', testCaseIds);
+        
+        return this.testSuiteService.updateTestSuiteTestCases(suiteId, testCaseIds);
       }),
       tap(() => {
         this.showAlertMessage('Test suite updated successfully', 'success');
         this.loadTestSuites();
         setTimeout(() => this.cancelEdit(), 1500);
-        this.isSaving.set(false);
       }),
       catchError(err => {
         console.error('Failed to update test suite:', err);
         this.showAlertMessage('Failed to update test suite: ' + (err.message || 'Unknown error'), 'error');
-        this.isSaving.set(false);
         return of(null);
-      })
+      }),
+      finalize(() => this.isSaving.set(false))
     ).subscribe();
   }
 
@@ -521,10 +490,7 @@ export class TestSuiteComponent {
       .map(tc => tc.id)
       .filter(id => id && id.trim() !== '') as string[];
     
-    console.log('Test case IDs to assign:', testCaseIds);
-    
     if (testCaseIds.length === 0) {
-      console.log('No valid test case IDs to assign');
       return of(void 0);
     }
 
@@ -532,19 +498,10 @@ export class TestSuiteComponent {
       testCaseIds: testCaseIds
     };
 
-    console.log('Assigning test cases with request:', request);
-
-    return this.testSuiteService.assignTestCasesToSuite(suiteId, request).pipe(
-      tap(() => {
-        console.log('Test cases assigned successfully to suite:', suiteId);
-      }),
-      catchError(err => {
-        console.error('Failed to assign test cases to suite:', err);
-        throw err; // Re-throw to be handled by the calling method
-      })
-    );
+    return this.testSuiteService.assignTestCasesToSuite(suiteId, request);
   }
 
+  // Delete functionality
   confirmDeleteSuite(suiteId: string): void {
     if (!suiteId) {
       this.showAlertMessage('Invalid test suite ID for deletion', 'error');
@@ -558,7 +515,7 @@ export class TestSuiteComponent {
     this.showAlert.set(true);
   }
 
-  handleConfirmDelete(forceDelete = false): void {
+  handleConfirmDelete(): void {
     const suiteId = this.pendingDeleteId();
     if (!suiteId || !this.currentProductId()) {
       this.showAlert.set(false);
@@ -569,31 +526,25 @@ export class TestSuiteComponent {
     this.isDeleting.set(true);
     this.showAlert.set(false);
 
-    console.log('Deleting test suite:', suiteId, 'with force:', forceDelete);
-
-    this.testSuiteService.deleteTestSuite(this.currentProductId(), suiteId, forceDelete).pipe(
+    this.testSuiteService.deleteTestSuite(this.currentProductId(), suiteId, false).pipe(
       tap(() => {
-        console.log('Test suite deleted successfully');
         this.showAlertMessage('Test suite deleted successfully', 'success');
         this.loadTestSuites();
       }),
       catchError(err => {
         console.error('Failed to delete test suite:', err);
         
-        if (err.status === 404) {
-          this.showAlertMessage('Test suite not found', 'error');
-        } else if (err.status === 409 || (err.message && err.message.includes('reference'))) {
-          // Show confirmation for force delete
-          this.alertMessage.set('This test suite contains references. Delete anyway?');
+        if (err.message && err.message.includes('reference')) {
+          // Ask for force delete
+          this.alertMessage.set('This test suite contains references. Force delete anyway?');
           this.alertType.set('warning');
           this.isConfirmAlert.set(true);
           this.showAlert.set(true);
-          this.isDeleting.set(false); // Reset deleting state for the confirmation dialog
-          return EMPTY;
+          return of(null);
         } else {
           this.showAlertMessage('Failed to delete test suite: ' + (err.message || 'Unknown error'), 'error');
+          return of(null);
         }
-        return EMPTY;
       }),
       finalize(() => {
         this.isDeleting.set(false);
@@ -608,6 +559,7 @@ export class TestSuiteComponent {
     this.pendingDeleteId.set(null);
   }
 
+  // Utility methods
   private showAlertMessage(message: string, type: 'success' | 'error' | 'warning'): void {
     console.log(`Alert [${type}]:`, message);
     this.alertMessage.set(message);
@@ -626,32 +578,40 @@ export class TestSuiteComponent {
   getModuleName(moduleId: string): string {
     if (!moduleId) return 'Unknown Module';
     const module = this.modules().find(m => m.id === moduleId);
-    return module ? module.name : 'Unknown Module';
+    return module?.name || 'Unknown Module';
   }
 
   getTestCaseCount(suite: TestSuiteResponse): number {
-    return suite.testCases?.length || 0;
+    // Use the enhanced data with counts if available
+    const suiteWithCount = this.testSuitesWithCounts().find(s => s.id === suite.id);
+    if (suiteWithCount) {
+      return suiteWithCount.testCaseCount;
+    }
+    
+    // Fallback to original method
+    if (!suite?.testCases) return 0;
+    return Array.isArray(suite.testCases) ? suite.testCases.length : 0;
   }
 
-formatDate(dateString: string | Date | undefined | null): string {
-  if (!dateString) return '-';
-  
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '-';
+  formatDate(dateString: string | Date | undefined | null): string {
+    if (!dateString) return '-';
     
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  } catch (error) {
-    console.error('Error formatting date:', error);
-    return '-';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '-';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '-';
+    }
   }
-}
 
   isLoading(): boolean {
     return this.isLoadingSuites() || this.isLoadingModules() || this.isLoadingTestCases() || this.isSaving() || this.isDeleting();
@@ -660,210 +620,8 @@ formatDate(dateString: string | Date | undefined | null): string {
   canSave(): boolean {
     return !this.isSaving() && this.suiteName.trim().length > 0;
   }
-
-  /* ************** NEW EXECUTION-SPECIFIC METHODS ************** */
-
-  startExecution(suiteId: string): void {
-    if (!suiteId) {
-      this.showAlertMessage('Invalid test suite ID', 'error');
-      return;
-    }
-
-    this.isExecuting.set(true);
-    this.selectedSuiteId.set(suiteId);
-    this.mode.set('execute');
-
-    this.testSuiteService.startTestSuiteExecution(suiteId).pipe(
-      tap(execution => {
-        console.log('Execution started:', execution);
-        this.currentExecution.set(execution);
-        this.loadExecutionSummary(suiteId);
-        this.loadExecutionDetailsForSuite(suiteId);
-      }),
-      catchError(err => {
-        console.error('Failed to start execution:', err);
-        this.showAlertMessage('Failed to start execution: ' + (err.message || 'Unknown error'), 'error');
-        this.isExecuting.set(false);
-        return EMPTY;
-      }),
-      finalize(() => this.isExecuting.set(false))
-    ).subscribe();
-  }
-
-  private loadExecutionSummary(suiteId: string): void {
-    this.testSuiteService.getExecutionSummary(suiteId).pipe(
-      tap(summary => {
-        console.log('Execution summary loaded:', summary);
-        this.executionSummary.set(summary);
-      }),
-      catchError(err => {
-        console.error('Failed to load execution summary:', err);
-        return EMPTY;
-      })
-    ).subscribe();
-  }
-
-  private loadExecutionDetailsForSuite(suiteId: string): void {
-    this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
-      tap(response => {
-        if (response.testCases) {
-          const details: Record<string, ExecutionDetails> = {};
-          response.testCases.forEach(tc => {
-            if (tc.executionDetails) {
-              details[tc.id!] = tc.executionDetails;
-            }
-          });
-          this.executionDetails.set(details);
-        }
-      }),
-      catchError(err => {
-        console.error('Failed to load execution details:', err);
-        return EMPTY;
-      })
-    ).subscribe();
-  }
-
-  updateTestCaseExecution(
-    testCaseId: string,
-    details: UpdateExecutionDetailsRequest
-  ): void {
-    const suiteId = this.selectedSuiteId();
-    if (!suiteId) {
-      this.showAlertMessage('No test suite selected', 'error');
-      return;
-    }
-
-    this.testSuiteService.updateExecutionDetails(suiteId, testCaseId, details).pipe(
-      tap(updatedDetails => {
-        console.log('Execution details updated:', updatedDetails);
-        this.executionDetails.update(current => ({
-          ...current,
-          [testCaseId]: updatedDetails
-        }));
-        this.loadExecutionSummary(suiteId);
-      }),
-      catchError(err => {
-        console.error('Failed to update execution details:', err);
-        this.showAlertMessage('Failed to update test case: ' + (err.message || 'Unknown error'), 'error');
-        return EMPTY;
-      })
-    ).subscribe();
-  }
-
-  handleFileUpload(testCaseId: string, event: Event): void {
-    const suiteId = this.selectedSuiteId();
-    if (!suiteId) {
-      this.showAlertMessage('No test suite selected', 'error');
-      return;
-    }
-
-    const input = event.target as HTMLInputElement;
-    if (!input.files || input.files.length === 0) {
-      return;
-    }
-
-    const file = input.files[0];
-    const uploadRequest: AddExecutionUploadRequest = {
-      fileName: file.name,
-      filePath: '', // Will be set by server
-      fileType: file.type,
-      fileSize: file.size,
-      uploadedBy: 'currentUser' // Replace with actual user
-    };
-
-    this.testSuiteService.addExecutionUpload(suiteId, testCaseId, uploadRequest).pipe(
-      tap(updatedDetails => {
-        console.log('Upload added:', updatedDetails);
-        this.executionDetails.update(current => ({
-          ...current,
-          [testCaseId]: updatedDetails
-        }));
-        this.showAlertMessage('File uploaded successfully', 'success');
-      }),
-      catchError(err => {
-        console.error('Failed to upload file:', err);
-        this.showAlertMessage('Failed to upload file: ' + (err.message || 'Unknown error'), 'error');
-        return EMPTY;
-      })
-    ).subscribe();
-  }
-
-  removeUpload(testCaseId: string, uploadId: string): void {
-    const suiteId = this.selectedSuiteId();
-    if (!suiteId) {
-      this.showAlertMessage('No test suite selected', 'error');
-      return;
-    }
-
-    this.testSuiteService.removeExecutionUpload(suiteId, uploadId).pipe(
-      tap(() => {
-        console.log('Upload removed');
-        this.executionDetails.update(current => {
-          const updated = {...current};
-          if (updated[testCaseId]?.uploads) {
-            updated[testCaseId].uploads = updated[testCaseId].uploads?.filter(
-              upload => upload.id !== uploadId
-            );
-          }
-          return updated;
-        });
-        this.showAlertMessage('File removed successfully', 'success');
-      }),
-      catchError(err => {
-        console.error('Failed to remove upload:', err);
-        this.showAlertMessage('Failed to remove file: ' + (err.message || 'Unknown error'), 'error');
-        return EMPTY;
-      })
-    ).subscribe();
-  }
-
-  completeExecution(): void {
-    const execution = this.currentExecution();
-    const suiteId = this.selectedSuiteId();
-    if (!execution || !suiteId) {
-      this.showAlertMessage('No active execution', 'error');
-      return;
-    }
-
-    const request: UpdateTestSuiteExecutionRequest = {
-      status: 'Completed',
-      completedAt: new Date()
-    };
-
-    this.isExecuting.set(true);
-    this.testSuiteService.updateTestSuiteExecution(suiteId, execution.id, request).pipe(
-      tap(updatedExecution => {
-        console.log('Execution completed:', updatedExecution);
-        this.currentExecution.set(updatedExecution);
-        this.showAlertMessage('Test execution completed', 'success');
-        this.mode.set('list');
-      }),
-      catchError(err => {
-        console.error('Failed to complete execution:', err);
-        this.showAlertMessage('Failed to complete execution: ' + (err.message || 'Unknown error'), 'error');
-        return EMPTY;
-      }),
-      finalize(() => this.isExecuting.set(false))
-    ).subscribe();
-  }
-
-  getExecutionStatusClass(status: string): string {
-    switch (status) {
-      case 'Pass': return 'status-pass';
-      case 'Fail': return 'status-fail';
-      case 'Pending': return 'status-pending';
-      case 'Blocked': return 'status-blocked';
-      default: return 'status-unknown';
-    }
-  }
-
-  getTestCaseExecutionDetails(testCaseId: string): ExecutionDetails | null {
-    return this.executionDetails()[testCaseId] || null;
-  }
+  // Add this method to your component class
+getSelectedTestCaseIds(): string {
+  return this.selectedTestCases().map(tc => tc.id).join(', ');
 }
-
-function throwError(arg0: () => Error): Observable<void> {
-  return new Observable(observer => {
-    observer.error(arg0());
-  });
 }

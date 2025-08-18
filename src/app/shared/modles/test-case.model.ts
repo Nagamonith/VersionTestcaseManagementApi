@@ -68,6 +68,7 @@ export interface TestCaseDetailResponse extends TestCaseResponse {
   testSuiteIds?: string[];
   actual?: string;
   remarks?: string;
+   executionDetails?: ExecutionDetails;
 }
 
 export interface CreateTestCaseRequest {

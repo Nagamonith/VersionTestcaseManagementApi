@@ -7,19 +7,10 @@ import {
   TestSuiteWithCasesResponse, 
   CreateTestSuiteRequest,
   AssignTestCasesRequest,
-  TestSuiteExecutionResponse,
-  UpdateTestSuiteExecutionRequest,
-  TestSuiteExecutionSummary,
-  TestSuiteExecutionHistoryItem
+  TestSuiteTestCaseItem
 } from '../modles/test-suite.model';
-import { 
-  TestCaseDetailResponse,
-  ExecutionDetails,
-  UpdateExecutionDetailsRequest,
-  AddExecutionUploadRequest
-} from '../modles/test-case.model';
 import { Observable, throwError } from 'rxjs';
-import { catchError, map, tap, retry, switchMap } from 'rxjs/operators';
+import { catchError, map, tap, retry } from 'rxjs/operators';
 import { IdResponse } from '../modles/product.model';
 
 @Injectable({
@@ -38,10 +29,8 @@ export class TestSuiteService {
     console.log('TestSuiteService initialized with API URL:', this.apiUrl);
   }
 
-  /* ************** EXISTING TEST SUITE METHODS ************** */
-
   getTestSuites(productId: string): Observable<TestSuiteResponse[]> {
-    if (!productId || !productId.trim()) {
+    if (!productId?.trim()) {
       return throwError(() => new Error('Product ID is required'));
     }
     
@@ -50,12 +39,12 @@ export class TestSuiteService {
     
     return this.http.get<TestSuiteResponse[]>(url, this.httpOptions).pipe(
       tap(response => {
-        console.log('Test suites fetched successfully:', response);
+        console.log('Raw test suites response:', response);
       }),
       map(response => {
         if (!response) return [];
         if (!Array.isArray(response)) {
-          console.warn('Expected array but got:', typeof response);
+          console.warn('Expected array but got:', typeof response, response);
           return [];
         }
         return response;
@@ -66,11 +55,8 @@ export class TestSuiteService {
   }
 
   getTestSuiteById(productId: string, id: string): Observable<TestSuiteResponse> {
-    if (!productId || !productId.trim()) {
-      return throwError(() => new Error('Product ID is required'));
-    }
-    if (!id || !id.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
+    if (!productId?.trim() || !id?.trim()) {
+      return throwError(() => new Error('Product ID and Test Suite ID are required'));
     }
     
     const url = `${this.apiUrl}/api/products/${productId}/testsuites/${id}`;
@@ -78,18 +64,88 @@ export class TestSuiteService {
     
     return this.http.get<TestSuiteResponse>(url, this.httpOptions).pipe(
       tap(response => {
-        console.log('Test suite fetched by ID:', response);
+        console.log('Test suite by ID response:', response);
       }),
       catchError(this.handleError('getTestSuiteById'))
     );
   }
 
+  getTestSuiteWithCases(testSuiteId: string): Observable<TestSuiteWithCasesResponse> {
+    if (!testSuiteId?.trim()) {
+      return throwError(() => new Error('Test Suite ID is required'));
+    }
+    
+    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases`;
+    console.log('Fetching test suite with cases from:', url);
+    
+    return this.http.get<any>(url, this.httpOptions).pipe(
+      tap(response => {
+        console.log('Raw test suite with cases response:', response);
+      }),
+      map(response => {
+        // Handle the response structure properly
+        if (!response) {
+          return {
+            id: testSuiteId,
+            productId: '',
+            name: '',
+            description: '',
+            isActive: true,
+            testCases: []
+          } as TestSuiteWithCasesResponse;
+        }
+
+        // Map the response to the expected structure
+        const mappedResponse: TestSuiteWithCasesResponse = {
+          id: response.id || testSuiteId,
+          productId: response.productId || '',
+          name: response.name || '',
+          description: response.description || '',
+          isActive: response.isActive !== false,
+          createdAt: response.createdAt,
+          updatedAt: response.updatedAt,
+          testCases: []
+        };
+
+        // Handle test cases mapping
+        if (response.testCases && Array.isArray(response.testCases)) {
+          mappedResponse.testCases = response.testCases.map((item: any) => {
+            // Handle both possible response structures
+            if (item.testCase && item.executionDetails) {
+              // Structure: { testCase: {...}, executionDetails: {...} }
+              return {
+                testCase: item.testCase,
+                executionDetails: item.executionDetails
+              } as TestSuiteTestCaseItem;
+            } else if (item.id && (item.useCase || item.scenario)) {
+              // Structure: direct test case object
+              return {
+                testCase: item,
+                executionDetails: item.executionDetails || {}
+              } as TestSuiteTestCaseItem;
+            } else {
+              console.warn('Unexpected test case structure:', item);
+              return {
+                testCase: item,
+                executionDetails: {}
+              } as TestSuiteTestCaseItem;
+            }
+          });
+        }
+
+        console.log('Mapped test suite with cases:', mappedResponse);
+        return mappedResponse;
+      }),
+      catchError(this.handleError('getTestSuiteWithCases'))
+    );
+  }
+
   createTestSuite(productId: string, suite: CreateTestSuiteRequest): Observable<IdResponse> {
-    if (!productId || !productId.trim()) {
+    if (!productId?.trim()) {
       return throwError(() => new Error('Product ID is required'));
     }
     
-    if (!suite.name || !suite.name.trim()) {
+    if (!suite.name?.trim()) {
       return throwError(() => new Error('Test suite name is required'));
     }
     
@@ -111,13 +167,11 @@ export class TestSuiteService {
   }
 
   updateTestSuite(productId: string, id: string, suite: CreateTestSuiteRequest): Observable<void> {
-    if (!productId || !productId.trim()) {
-      return throwError(() => new Error('Product ID is required'));
+    if (!productId?.trim() || !id?.trim()) {
+      return throwError(() => new Error('Product ID and Test Suite ID are required'));
     }
-    if (!id || !id.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    if (!suite.name || !suite.name.trim()) {
+    
+    if (!suite.name?.trim()) {
       return throwError(() => new Error('Test suite name is required'));
     }
     
@@ -139,11 +193,8 @@ export class TestSuiteService {
   }
 
   deleteTestSuite(productId: string, testSuiteId: string, forceDelete: boolean = false): Observable<void> {
-    if (!productId || !productId.trim()) {
-      return throwError(() => new Error('Product ID is required'));
-    }
-    if (!testSuiteId || !testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
+    if (!productId?.trim() || !testSuiteId?.trim()) {
+      return throwError(() => new Error('Product ID and Test Suite ID are required'));
     }
 
     const url = `${this.apiUrl}/api/products/${productId}/testsuites/${testSuiteId}`;
@@ -178,30 +229,8 @@ export class TestSuiteService {
     );
   }
 
-  getTestSuiteWithCases(testSuiteId: string): Observable<TestSuiteWithCasesResponse> {
-    if (!testSuiteId || !testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases`;
-    console.log('Fetching test suite with cases from:', url);
-    
-    return this.http.get<TestSuiteWithCasesResponse>(url, this.httpOptions).pipe(
-      tap(response => {
-        console.log('Test suite with cases fetched:', response);
-      }),
-      map(response => {
-        if (response && !response.testCases) {
-          response.testCases = [];
-        }
-        return response;
-      }),
-      catchError(this.handleError('getTestSuiteWithCases'))
-    );
-  }
-
   assignTestCasesToSuite(testSuiteId: string, request: AssignTestCasesRequest): Observable<void> {
-    if (!testSuiteId || !testSuiteId.trim()) {
+    if (!testSuiteId?.trim()) {
       return throwError(() => new Error('Test Suite ID is required'));
     }
     
@@ -209,7 +238,7 @@ export class TestSuiteService {
       return throwError(() => new Error('At least one test case ID is required'));
     }
 
-    const validTestCaseIds = request.testCaseIds.filter((id: string) => id && id.trim() !== '');
+    const validTestCaseIds = request.testCaseIds.filter((id: string) => id?.trim());
     
     if (validTestCaseIds.length === 0) {
       return throwError(() => new Error('No valid test case IDs provided'));
@@ -249,11 +278,8 @@ export class TestSuiteService {
   }
 
   removeTestCaseFromSuite(testSuiteId: string, testCaseId: string): Observable<void> {
-    if (!testSuiteId || !testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    if (!testCaseId || !testCaseId.trim()) {
-      return throwError(() => new Error('Test Case ID is required'));
+    if (!testSuiteId?.trim() || !testCaseId?.trim()) {
+      return throwError(() => new Error('Test Suite ID and Test Case ID are required'));
     }
     
     const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases/${testCaseId}`;
@@ -268,7 +294,7 @@ export class TestSuiteService {
   }
 
   removeAllTestCasesFromSuite(testSuiteId: string): Observable<void> {
-    if (!testSuiteId || !testSuiteId.trim()) {
+    if (!testSuiteId?.trim()) {
       return throwError(() => new Error('Test Suite ID is required'));
     }
     
@@ -283,157 +309,42 @@ export class TestSuiteService {
     );
   }
 
-  getTestCasesForSuite(suiteId: string): Observable<TestCaseDetailResponse[]> {
-    if (!suiteId || !suiteId.trim()) {
-      return throwError(() => new Error('Suite ID is required'));
-    }
-
-    return this.getTestSuiteWithCases(suiteId).pipe(
-      map(response => {
-        if (!response || !response.testCases) {
-          console.warn('No test cases found in response');
-          return [];
-        }
-        
-        return response.testCases.map((tc: any) => {
-          const detailed: TestCaseDetailResponse = {
-            ...tc,
-            steps: [],
-            expected: [],
-            attributes: [],
-            attachments: [],
-            testSuiteIds: [suiteId]
-          };
-          return detailed;
-        });
-      }),
-      catchError(this.handleError('getTestCasesForSuite'))
-    );
-  }
-
   updateTestSuiteTestCases(testSuiteId: string, testCaseIds: string[]): Observable<void> {
-    if (!testSuiteId || !testSuiteId.trim()) {
+    if (!testSuiteId?.trim()) {
       return throwError(() => new Error('Test Suite ID is required'));
     }
 
+    console.log('Updating test suite test cases:', testSuiteId, testCaseIds);
+
+    // First remove all existing test cases
     return this.removeAllTestCasesFromSuite(testSuiteId).pipe(
-      switchMap(() => {
+      // Then add the new test cases if any
+      tap(() => {
         if (testCaseIds && testCaseIds.length > 0) {
-          return this.assignTestCasesToSuite(testSuiteId, { testCaseIds });
+          console.log('Removed all test cases, now assigning new ones:', testCaseIds);
+        } else {
+          console.log('Removed all test cases, no new ones to assign');
         }
+      }),
+      // Chain the assignment if we have test cases to add
+      catchError(error => {
+        console.error('Error removing test cases:', error);
+        // Continue even if removal fails (might be empty already)
         return new Observable<void>(observer => {
           observer.next();
           observer.complete();
         });
-      }),
-      catchError(this.handleError('updateTestSuiteTestCases'))
-    );
-  }
-
-  /* ************** NEW EXECUTION-SPECIFIC METHODS ************** */
-
-  getExecutionDetails(testSuiteId: string, testCaseId: string): Observable<ExecutionDetails> {
-    if (!testSuiteId.trim() || !testCaseId.trim()) {
-      return throwError(() => new Error('Test Suite ID and Test Case ID are required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases/${testCaseId}/execution`;
-    console.log('Fetching execution details from:', url);
-
-    return this.http.get<ExecutionDetails>(url, this.httpOptions).pipe(
-      tap(response => console.log('Execution details fetched:', response)),
-      catchError(this.handleError('getExecutionDetails'))
-    );
-  }
-
-  updateExecutionDetails(testSuiteId: string, testCaseId: string, details: UpdateExecutionDetailsRequest): Observable<ExecutionDetails> {
-    if (!testSuiteId.trim() || !testCaseId.trim()) {
-      return throwError(() => new Error('Test Suite ID and Test Case ID are required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases/${testCaseId}/execution`;
-    console.log('Updating execution details at:', url, 'with:', details);
-
-    return this.http.put<ExecutionDetails>(url, details, this.httpOptions).pipe(
-      tap(response => console.log('Execution details updated:', response)),
-      catchError(this.handleError('updateExecutionDetails'))
-    );
-  }
-
-  addExecutionUpload(testSuiteId: string, testCaseId: string, uploadRequest: AddExecutionUploadRequest): Observable<ExecutionDetails> {
-    if (!testSuiteId.trim() || !testCaseId.trim()) {
-      return throwError(() => new Error('Test Suite ID and Test Case ID are required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases/${testCaseId}/uploads`;
-    console.log('Adding execution upload at:', url, 'with:', uploadRequest);
-
-    return this.http.post<ExecutionDetails>(url, uploadRequest, this.httpOptions).pipe(
-      tap(response => console.log('Upload added to execution:', response)),
-      catchError(this.handleError('addExecutionUpload'))
-    );
-  }
-
-  removeExecutionUpload(testSuiteId: string, uploadId: string): Observable<void> {
-    if (!testSuiteId.trim() || !uploadId.trim()) {
-      return throwError(() => new Error('Test Suite ID and Upload ID are required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/testcases/uploads/${uploadId}`;
-    console.log('Removing execution upload at:', url);
-
-    return this.http.delete<void>(url, this.httpOptions).pipe(
-      tap(() => console.log('Upload removed from execution')),
-      catchError(this.handleError('removeExecutionUpload'))
-    );
-  }
-
-  startTestSuiteExecution(testSuiteId: string): Observable<TestSuiteExecutionResponse> {
-    if (!testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/executions`;
-    console.log('Starting test suite execution at:', url);
-
-    return this.http.post<TestSuiteExecutionResponse>(url, {}, this.httpOptions).pipe(
-      tap(response => console.log('Test suite execution started:', response)),
-      catchError(this.handleError('startTestSuiteExecution'))
-    );
-  }
-
-  updateTestSuiteExecution(testSuiteId: string, executionId: string, request: UpdateTestSuiteExecutionRequest): Observable<TestSuiteExecutionResponse> {
-    if (!testSuiteId.trim() || !executionId.trim()) {
-      return throwError(() => new Error('Test Suite ID and Execution ID are required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/executions/${executionId}`;
-    console.log('Updating test suite execution at:', url, 'with:', request);
-
-    return this.http.put<TestSuiteExecutionResponse>(url, request, this.httpOptions).pipe(
-      tap(response => console.log('Test suite execution updated:', response)),
-      catchError(this.handleError('updateTestSuiteExecution'))
-    );
-  }
-
-  getExecutionSummary(testSuiteId: string): Observable<TestSuiteExecutionSummary> {
-    if (!testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/executions/summary`;
-    console.log('Fetching execution summary from:', url);
-
-    return this.http.get<TestSuiteExecutionSummary>(url, this.httpOptions).pipe(
-      tap(response => console.log('Execution summary fetched:', response)),
-      catchError(this.handleError('getExecutionSummary'))
-    );
-  }
-
-  getExecutionHistory(testSuiteId: string): Observable<TestSuiteExecutionHistoryItem[]> {
-    if (!testSuiteId.trim()) {
-      return throwError(() => new Error('Test Suite ID is required'));
-    }
-    const url = `${this.apiUrl}/api/testsuites/${testSuiteId}/executions/history`;
-    console.log('Fetching execution history from:', url);
-
-    return this.http.get<TestSuiteExecutionHistoryItem[]>(url, this.httpOptions).pipe(
-      tap(response => console.log('Execution history fetched:', response)),
-      map(response => Array.isArray(response) ? response : []),
-      catchError(this.handleError('getExecutionHistory'))
+      })
+    ).pipe(
+      // Now assign new test cases if provided
+      tap(() => {
+        if (testCaseIds?.length > 0) {
+          this.assignTestCasesToSuite(testSuiteId, { testCaseIds }).subscribe({
+            next: () => console.log('Successfully assigned new test cases'),
+            error: (error) => console.error('Error assigning new test cases:', error)
+          });
+        }
+      })
     );
   }
 

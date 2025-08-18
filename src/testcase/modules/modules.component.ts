@@ -547,7 +547,7 @@ toggleSelectionMode(showSuites: boolean, showRuns: boolean): void {
       });
   }
 
-  private loadTestCasesForSuite(suiteId: string): void {
+private loadTestCasesForSuite(suiteId: string): void {
   console.log('Loading test cases for suite:', suiteId);
   
   this.testSuiteService.getTestSuiteWithCases(suiteId)
@@ -565,29 +565,59 @@ toggleSelectionMode(showSuites: boolean, showRuns: boolean): void {
           createdAt: new Date(),
           updatedAt: new Date(),
           testCases: []
-        });
+        } as TestSuiteWithCasesResponse);
       }),
       map(response => ({
         ...response,
-        testCases: (response.testCases || []).map(tc => 
-          this.convertTestCaseDetailToTestCase({
-            ...tc,
-            expected: (tc as any).expected || ''
-          } as TestCaseDetailResponse)
-        )
+        testCases: (response.testCases || []).map(tcItem => {
+          // Create a proper TestCaseDetailResponse from the TestSuiteTestCaseItem
+          const testCaseDetail: TestCaseDetailResponse = {
+            id: tcItem.testCase.id,
+            moduleId: tcItem.testCase.moduleId,
+            productVersionId: tcItem.testCase.productVersionId,
+            version: tcItem.testCase.version || tcItem.testCase.productVersionName,
+            productVersionName: tcItem.testCase.productVersionName || tcItem.testCase.version,
+            testCaseId: tcItem.testCase.testCaseId,
+            useCase: tcItem.testCase.useCase,
+            scenario: tcItem.testCase.scenario,
+            testType: tcItem.testCase.testType,
+            testTool: tcItem.testCase.testTool,
+            result: tcItem.executionDetails?.result || tcItem.testCase.result,
+            actual: tcItem.executionDetails?.actual,
+            remarks: tcItem.executionDetails?.remarks,
+            createdAt: tcItem.testCase.createdAt,
+            updatedAt: tcItem.testCase.updatedAt,
+            expected: (tcItem as any).expected || '',
+            steps: [], // Default empty array since steps isn't in TestCaseResponse
+            attributes: [], // Default empty array since attributes isn't in TestCaseResponse
+            uploads: tcItem.executionDetails?.uploads?.map(u => u.filePath) || [],
+            testSuiteIds: [suiteId],
+            executionDetails: tcItem.executionDetails
+          };
+          
+          // If we have detailed test case data (from another source), merge it here
+          if ('steps' in tcItem.testCase) {
+            testCaseDetail.steps = (tcItem.testCase as any).steps || [];
+          }
+          if ('attributes' in tcItem.testCase) {
+            testCaseDetail.attributes = (tcItem.testCase as any).attributes || [];
+          }
+          
+          return this.convertTestCaseDetailToTestCase(testCaseDetail);
+        })
       }))
     )
     .subscribe(response => {
       console.log('Suite test cases loaded:', response.testCases.length);
       this.versionTestCases.set(response.testCases);
       
-      // Ensure form is initialized after setting test cases
       setTimeout(() => {
         this.initializeFormForTestCases();
-        this.debugFormState(); // Add this for debugging
+        this.debugFormState();
       }, 100);
     });
 }
+
 debugFormState(): void {
   console.log('=== FORM DEBUG INFO ===');
   console.log('Version test cases length:', this.versionTestCases().length);
@@ -948,7 +978,7 @@ hasTestCasesToView(): boolean {
     });
   }
 
-  private updateTestRunProgress(): void {
+private updateTestRunProgress(): void {
     const selectedRun = this.selectedTestRun();
     if (!selectedRun) return;
 
@@ -970,13 +1000,37 @@ hasTestCasesToView(): boolean {
               createdAt: new Date(),
               updatedAt: new Date(),
               testCases: []
-            });
+            } as TestSuiteWithCasesResponse);
           }),
           map(response => ({
             ...response,
-            testCases: (response.testCases || []).map(tc => 
-              this.convertTestCaseDetailToTestCase(tc)
-            )
+            testCases: (response.testCases || []).map(tcItem => {
+              // Convert TestSuiteTestCaseItem to TestCaseDetailResponse
+              const testCaseDetail: TestCaseDetailResponse = {
+                id: tcItem.testCase.id,
+                moduleId: tcItem.testCase.moduleId,
+                productVersionId: tcItem.testCase.productVersionId,
+                version: tcItem.testCase.version || tcItem.testCase.productVersionName,
+                productVersionName: tcItem.testCase.productVersionName || tcItem.testCase.version,
+                testCaseId: tcItem.testCase.testCaseId,
+                useCase: tcItem.testCase.useCase,
+                scenario: tcItem.testCase.scenario,
+                testType: tcItem.testCase.testType,
+                testTool: tcItem.testCase.testTool,
+                result: tcItem.executionDetails?.result || tcItem.testCase.result,
+                actual: tcItem.executionDetails?.actual,
+                remarks: tcItem.executionDetails?.remarks,
+                createdAt: tcItem.testCase.createdAt,
+                updatedAt: tcItem.testCase.updatedAt,
+                expected: '',
+                steps: [],
+                attributes: [],
+                uploads: tcItem.executionDetails?.uploads?.map(u => u.filePath) || [],
+                testSuiteIds: [suiteId],
+                executionDetails: tcItem.executionDetails
+              };
+              return this.convertTestCaseDetailToTestCase(testCaseDetail);
+            })
           }))
         )
     );
@@ -1017,7 +1071,6 @@ hasTestCasesToView(): boolean {
       }
     });
   }
-
   // Attribute handling methods
   extractAvailableAttributes(): void {
     const allAttributes = new Set<string>();

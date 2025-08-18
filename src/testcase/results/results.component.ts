@@ -6,7 +6,7 @@ import { TestCaseService } from 'src/app/shared/services/test-case.service';
 import { TestRunService } from 'src/app/shared/services/test-run.service';
 import { TestSuiteService } from 'src/app/shared/services/test-suite.service';
 import { ActivatedRoute } from '@angular/router';
-import { of, BehaviorSubject, switchMap, combineLatest, firstValueFrom, forkJoin, map } from 'rxjs';
+import { of, BehaviorSubject, switchMap, combineLatest, firstValueFrom, forkJoin, map, catchError } from 'rxjs';
 
 @Component({
   selector: 'app-results',
@@ -147,11 +147,21 @@ export class ResultsComponent implements OnInit {
       let pendingCases = 0;
 
       const suiteStatsPromises = (testRun.testSuites || []).map(async (suite: any) => {
-        const suiteCases = await firstValueFrom(this.testSuiteService.getTestCasesForSuite(suite.id));
+        const suiteResponse = await firstValueFrom(
+          this.testSuiteService.getTestSuiteWithCases(suite.id).pipe(
+            catchError(() => of({ testCases: [] }))
+          )
+        );
 
-        const suiteTotal = suiteCases.length;
-        const suitePassed = suiteCases.filter((tc: any) => tc.result === 'Pass').length;
-        const suiteFailed = suiteCases.filter((tc: any) => tc.result === 'Fail').length;
+        const suiteCases = suiteResponse.testCases || [];
+        const testCaseDetails = suiteCases.map(tcItem => ({
+          ...tcItem.testCase,
+          result: tcItem.executionDetails?.result || tcItem.testCase.result
+        }));
+
+        const suiteTotal = testCaseDetails.length;
+        const suitePassed = testCaseDetails.filter(tc => tc.result === 'Pass').length;
+        const suiteFailed = testCaseDetails.filter(tc => tc.result === 'Fail').length;
         const suitePending = suiteTotal - suitePassed - suiteFailed;
 
         totalCases += suiteTotal;
@@ -196,13 +206,24 @@ export class ResultsComponent implements OnInit {
 
   private async loadSuiteTestCases(suiteId: string) {
     try {
-      const cases = await firstValueFrom(this.testSuiteService.getTestCasesForSuite(suiteId));
-      this.suiteTestCases.set(cases);
+      const response = await firstValueFrom(
+        this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+          catchError(() => of({ testCases: [] }))
+        )
+      );
+
+      const testCaseDetails = (response.testCases || []).map(tcItem => ({
+        ...tcItem.testCase,
+        executionDetails: tcItem.executionDetails
+      }));
+      
+      this.suiteTestCases.set(testCaseDetails);
     } catch (error) {
       console.error('Error loading suite test cases:', error);
       this.suiteTestCases.set([]);
     }
   }
+
 
   async getModuleName(moduleId: string): Promise<string> {
     const modules = this.modules();
@@ -270,7 +291,7 @@ export class ResultsComponent implements OnInit {
     XLSX.writeFile(wb, `${module.name}_Test_Results.xlsx`);
   }
 
-  async exportAllTestSuites(): Promise<void> {
+async exportAllTestSuites(): Promise<void> {
     const stats = this.testRunStats();
     if (!stats) return;
 
@@ -297,19 +318,28 @@ export class ResultsComponent implements OnInit {
 
     // Add sheets for each suite
     for (const suite of stats.suiteStats) {
-      const suiteCases = await firstValueFrom(this.testSuiteService.getTestCasesForSuite(suite.suiteId));
+      const suiteResponse = await firstValueFrom(
+        this.testSuiteService.getTestSuiteWithCases(suite.suiteId).pipe(
+          catchError(() => of({ testCases: [] }))
+        )
+      );
 
-      const suiteData = suiteCases?.map((testCase: any) => ({
-        'Sl.No': testCase.slNo,
-        'Test Case ID': testCase.testCaseId,
-        'Use Case': testCase.useCase,
-        'Scenario': testCase.scenario,
-        'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
-        'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
-        'Result': testCase.result || 'Pending',
-        'Actual': testCase.actual || '',
-        'Remarks': testCase.remarks || ''
-      })) || [];
+      const suiteData = (suiteResponse.testCases || []).map((tcItem: any) => {
+        const testCase = tcItem.testCase;
+        const executionDetails = tcItem.executionDetails || {};
+        
+        return {
+          'Sl.No': testCase.slNo || '',
+          'Test Case ID': testCase.testCaseId,
+          'Use Case': testCase.useCase,
+          'Scenario': testCase.scenario,
+          'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
+          'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
+          'Result': executionDetails.result || testCase.result || 'Pending',
+          'Actual': executionDetails.actual || '',
+          'Remarks': executionDetails.remarks || ''
+        };
+      });
 
       const suiteWs = XLSX.utils.json_to_sheet(suiteData);
       XLSX.utils.book_append_sheet(wb, suiteWs, suite.suiteName.substring(0, 31));
@@ -318,31 +348,41 @@ export class ResultsComponent implements OnInit {
     XLSX.writeFile(wb, `${stats.runName}_All_Test_Suites.xlsx`);
   }
 
-  async exportSingleSuite(suiteId: string): Promise<void> {
+async exportSingleSuite(suiteId: string): Promise<void> {
     const stats = this.testRunStats();
     if (!stats) return;
 
     const suite = stats.suiteStats.find((s: any) => s.suiteId === suiteId);
     if (!suite) return;
 
-    const suiteCases = await firstValueFrom(this.testSuiteService.getTestCasesForSuite(suiteId));
+    // Use getTestSuiteWithCases instead of getTestCasesForSuite
+    const suiteResponse = await firstValueFrom(
+      this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+        catchError(() => of({ testCases: [] }))
+      )
+    );
 
-    if (!suiteCases || suiteCases.length === 0) {
+    if (!suiteResponse.testCases || suiteResponse.testCases.length === 0) {
       alert('No test cases found in this suite');
       return;
     }
 
-    const data = suiteCases.map((testCase: any) => ({
-      'Sl.No': testCase.slNo,
-      'Test Case ID': testCase.testCaseId,
-      'Use Case': testCase.useCase,
-      'Scenario': testCase.scenario,
-      'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
-      'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
-      'Result': testCase.result || 'Pending',
-      'Actual': testCase.actual || '',
-      'Remarks': testCase.remarks || ''
-    }));
+    const data = suiteResponse.testCases.map((tcItem: any) => {
+      const testCase = tcItem.testCase;
+      const executionDetails = tcItem.executionDetails || {};
+      
+      return {
+        'Sl.No': testCase.slNo || '',
+        'Test Case ID': testCase.testCaseId,
+        'Use Case': testCase.useCase,
+        'Scenario': testCase.scenario,
+        'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
+        'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
+        'Result': executionDetails.result || testCase.result || 'Pending',
+        'Actual': executionDetails.actual || '',
+        'Remarks': executionDetails.remarks || ''
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
