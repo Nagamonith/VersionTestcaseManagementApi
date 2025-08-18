@@ -29,30 +29,25 @@ export class TestSuiteService {
     console.log('TestSuiteService initialized with API URL:', this.apiUrl);
   }
 
-  getTestSuites(productId: string): Observable<TestSuiteResponse[]> {
-    if (!productId?.trim()) {
-      return throwError(() => new Error('Product ID is required'));
-    }
-    
-    const url = `${this.apiUrl}/api/products/${productId}/testsuites`;
-    console.log('Fetching test suites from:', url);
-    
-    return this.http.get<TestSuiteResponse[]>(url, this.httpOptions).pipe(
-      tap(response => {
-        console.log('Raw test suites response:', response);
-      }),
-      map(response => {
-        if (!response) return [];
-        if (!Array.isArray(response)) {
-          console.warn('Expected array but got:', typeof response, response);
-          return [];
-        }
-        return response;
-      }),
-      retry(1),
-      catchError(this.handleError('getTestSuites'))
-    );
+ // In your test-suite.service.ts
+getTestSuites(productId: string): Observable<TestSuiteResponse[]> {
+  if (!productId?.trim()) {
+    return throwError(() => new Error('Product ID is required'));
   }
+  
+  const url = `${this.apiUrl}/api/products/${productId}/testsuites`;
+  
+  return this.http.get<TestSuiteResponse[]>(url, this.httpOptions).pipe(
+    map(response => {
+      if (!response) return [];
+      return response.map(suite => ({
+        ...suite,
+        testCaseCount: suite.testCases?.length || 0
+      }));
+    }),
+    catchError(this.handleError('getTestSuites'))
+  );
+}
 
   getTestSuiteById(productId: string, id: string): Observable<TestSuiteResponse> {
     if (!productId?.trim() || !id?.trim()) {

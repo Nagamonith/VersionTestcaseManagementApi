@@ -22,6 +22,7 @@ export interface TestSuiteResponse {
   createdAt?: Date;
   updatedAt?: Date;
   testCases?: TestCaseResponse[];
+  testCaseCount?: number;
 }
 
 // Enhanced interface for test suite with test case items

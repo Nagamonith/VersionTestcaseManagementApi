@@ -1,5 +1,5 @@
-import { Component, inject, signal, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, OnInit, computed } from '@angular/core';
+import { CommonModule, formatDate } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TestRunService } from 'src/app/shared/services/test-run.service';
 import { TestSuiteService } from 'src/app/shared/services/test-suite.service';
@@ -8,7 +8,7 @@ import { TestSuiteResponse } from 'src/app/shared/modles/test-suite.model';
 import { AlertComponent } from 'src/app/shared/alert/alert.component';
 import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { catchError, of, tap } from 'rxjs';
+import { catchError, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
@@ -101,25 +101,55 @@ export class TestRunComponent implements OnInit {
     ).subscribe();
   }
 
-  private loadTestSuites(): void {
-    if (!this.currentProductId()) return;
+// In your test-run.component.ts
+private loadTestSuites(): void {
+  if (!this.currentProductId()) return;
 
-    this.isLoadingSuites.set(true);
-    this.testSuiteService.getTestSuites(this.currentProductId()).pipe(
-      tap((suites) => {
-        this.testSuites.set(suites);
-        this.filteredTestSuites.set(suites);
-        this.isLoadingSuites.set(false);
-      }),
-      catchError(err => {
-        console.error('Failed to load test suites:', err);
-        this.showAlertMessage('Failed to load test suites', 'error');
-        this.isLoadingSuites.set(false);
+  this.isLoadingSuites.set(true);
+  this.testSuiteService.getTestSuites(this.currentProductId()).pipe(
+    switchMap(suites => {
+      if (!suites || suites.length === 0) {
         return of([]);
-      })
-    ).subscribe();
-  }
+      }
 
+      // Load test cases for each suite
+      const suiteRequests = suites.map(suite => 
+        this.testSuiteService.getTestSuiteWithCases(suite.id).pipe(
+          catchError(() => of({...suite, testCases: []})),
+          map(suiteWithCases => ({
+            ...suite,
+            testCases: suiteWithCases.testCases?.map(tc => tc.testCase) || []
+          }))
+        )
+      );
+      return forkJoin(suiteRequests);
+    }),
+    tap(suitesWithCases => {
+      this.testSuites.set(suitesWithCases);
+      this.filteredTestSuites.set(suitesWithCases);
+    }),
+    catchError(err => {
+      console.error('Failed to load test suites:', err);
+      this.showAlertMessage('Failed to load test suites', 'error');
+      return of([]);
+    }),
+    finalize(() => this.isLoadingSuites.set(false))
+  ).subscribe();
+}
+// In your TestRunComponent class
+testSuitesWithCounts = computed(() => 
+  this.testSuites().map(suite => ({
+    ...suite,
+    testCaseCount: suite.testCases?.length || 0
+  }))
+);
+// In your TestRunComponent class
+testRunsWithCounts = computed(() => 
+  this.testRuns().map(run => ({
+    ...run,
+    totalTestCases: run.testSuites?.reduce((sum, suite) => sum + (suite.testCases?.length || 0), 0) || 0
+  }))
+);
   startAddNewRun(): void {
     this.mode.set('add');
     this.runName = '';

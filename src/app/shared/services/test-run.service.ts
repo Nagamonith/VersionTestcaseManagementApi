@@ -196,20 +196,25 @@ export class TestRunService {
     return this.updateTestRunStatus(productId, testRunId, status.status);
   }
 
-  getAssignedTestSuites(testRunId: string): Observable<any[]> {
-    if (!testRunId) {
-      return throwError(() => new Error('Test Run ID is required'));
-    }
-    
-    return this.http.get<any[]>(
-      `${this.apiUrl}/testruns/${testRunId}/testsuites`
-    ).pipe(
-      catchError(error => {
-        console.error('Error fetching assigned test suites:', error);
-        return throwError(() => new Error('Failed to fetch assigned test suites'));
-      })
-    );
+// In your test-run.service.ts
+getAssignedTestSuites(testRunId: string): Observable<any[]> {
+  if (!testRunId) {
+    return throwError(() => new Error('Test Run ID is required'));
   }
+  
+  return this.http.get<any[]>(
+    `${this.apiUrl}/testruns/${testRunId}/testsuites`
+  ).pipe(
+    map(suites => suites.map(suite => ({
+      ...suite,
+      testCaseCount: suite.testCases?.length || 0
+    }))),
+    catchError(error => {
+      console.error('Error fetching assigned test suites:', error);
+      return throwError(() => new Error('Failed to fetch assigned test suites'));
+    })
+  );
+}
 
   assignTestSuites(testRunId: string, suiteIds: string[]): Observable<void> {
     if (!testRunId) {

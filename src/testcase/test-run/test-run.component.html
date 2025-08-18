@@ -42,7 +42,7 @@
             <td>{{ run.name }}</td>
             <td>{{ run.description || '-' }}</td>
             <td>{{ run.status }}</td>
-            <td>{{ run.testSuites?.length || 0 }}</td>
+           <td>{{ run.testSuites?.length || 0 }}</td>
             <td>{{ formatDate(run.updatedAt) }}</td>
             <td>{{ run.createdBy || '-' }}</td>
             <td class="actions">
@@ -118,7 +118,7 @@
               </td>
               <td>{{ suite.name }}</td>
               <td>{{ suite.description || '-' }}</td>
-              <td>{{ suite.testCases?.length || 0 }}</td>
+             <td>{{ suite.testCases?.length || 0 }}</td>
             </tr>
           </tbody>
         </table>
