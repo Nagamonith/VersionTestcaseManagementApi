@@ -596,55 +596,73 @@ private loadTestCasesForSuite(suiteId: string): void {
           testCases: []
         } as TestSuiteWithCasesResponse);
       }),
-      map(response => ({
-        ...response,
-        testCases: (response.testCases || []).map(tcItem => {
-          // Create a proper TestCaseDetailResponse from the TestSuiteTestCaseItem
-          const testCaseDetail: TestCaseDetailResponse = {
-            id: tcItem.testCase.id,
-            moduleId: tcItem.testCase.moduleId,
-            productVersionId: tcItem.testCase.productVersionId,
-            version: tcItem.testCase.version || tcItem.testCase.productVersionName,
-            productVersionName: tcItem.testCase.productVersionName || tcItem.testCase.version,
-            testCaseId: tcItem.testCase.testCaseId,
-            useCase: tcItem.testCase.useCase,
-            scenario: tcItem.testCase.scenario,
-            testType: tcItem.testCase.testType,
-            testTool: tcItem.testCase.testTool,
-            result: tcItem.executionDetails?.result || tcItem.testCase.result,
-            actual: tcItem.executionDetails?.actual,
-            remarks: tcItem.executionDetails?.remarks,
-            createdAt: tcItem.testCase.createdAt,
-            updatedAt: tcItem.testCase.updatedAt,
-            expected: (tcItem as any).expected || '',
-            steps: [], // Default empty array since steps isn't in TestCaseResponse
-            attributes: [], // Default empty array since attributes isn't in TestCaseResponse
-            uploads: tcItem.executionDetails?.uploads?.map(u => u.filePath) || [],
-            testSuiteIds: [suiteId],
-            executionDetails: tcItem.executionDetails
-          };
-          
-          // If we have detailed test case data (from another source), merge it here
-          if ('steps' in tcItem.testCase) {
-            testCaseDetail.steps = (tcItem.testCase as any).steps || [];
-          }
-          if ('attributes' in tcItem.testCase) {
-            testCaseDetail.attributes = (tcItem.testCase as any).attributes || [];
-          }
-          
-          return this.convertTestCaseDetailToTestCase(testCaseDetail);
-        })
-      }))
+      switchMap((response: TestSuiteWithCasesResponse) => {
+        const items = response.testCases || [];
+        if (items.length === 0) {
+          return of({ response, cases: [] as TestCase[] });
+        }
+        const detailRequests = items.map(tcItem =>
+          this.testCaseService.getTestCaseDetail(tcItem.testCase.moduleId, tcItem.testCase.id).pipe(
+            map(detail => {
+              // overlay execution details
+              const exec = tcItem.executionDetails || {} as any;
+              const overlaid: TestCaseDetailResponse = {
+                ...detail,
+                result: exec.result || detail.result,
+                actual: exec.actual || detail.actual,
+                remarks: exec.remarks || detail.remarks,
+                executionDetails: exec,
+                // ensure we also expose uploads via execution
+                uploads: exec.uploads?.map((u: any) => u.filePath) || (detail as any).attachments?.map((u: any) => u.filePath) || detail.uploads || []
+              } as any;
+              return this.convertTestCaseDetailToTestCase(overlaid);
+            }),
+            catchError(() => of(null as unknown as TestCase))
+          )
+        );
+        return forkJoin(detailRequests).pipe(
+          map(cases => ({ response, cases: (cases || []).filter(Boolean) as TestCase[] }))
+        );
+      }),
+      map(({ cases }) => cases)
     )
-    .subscribe(response => {
-      console.log('Suite test cases loaded:', response.testCases.length);
-      this.versionTestCases.set(response.testCases);
+    .subscribe(responseCases => {
+      console.log('Suite test cases loaded:', responseCases.length);
+      this.versionTestCases.set(responseCases);
+      this.ensureStepsForCases();
       
       setTimeout(() => {
         this.initializeFormForTestCases();
         this.debugFormState();
       }, 100);
     });
+}
+
+private ensureStepsForCases(): void {
+  const cases = this.versionTestCases();
+  const missing = cases
+    .map((tc, idx) => ({ tc, idx }))
+    .filter(x => !x.tc.steps || x.tc.steps.length === 0);
+  if (missing.length === 0) return;
+
+  const requests = missing.map(x => 
+    this.testCaseService.getTestCaseSteps(x.tc.id).pipe(
+      catchError(() => of([] as any[])),
+      map(steps => ({ idx: x.idx, steps }))
+    )
+  );
+
+  forkJoin(requests).subscribe(updates => {
+    const updated = [...this.versionTestCases()];
+    updates.forEach(u => {
+      const tc = updated[u.idx];
+      if (tc) {
+        (tc as any).steps = u.steps || [];
+      }
+    });
+    this.versionTestCases.set(updated);
+    this.cdRef.detectChanges();
+  });
 }
 
 debugFormState(): void {
@@ -896,6 +914,7 @@ viewAllSelectedCases(): void {
   ).subscribe({
     next: allCases => {
       this.versionTestCases.set(allCases);
+      this.ensureStepsForCases();
       this.showViewTestCases = true;
       this.showStartTesting = false;
       this.initializeFormForTestCases();
@@ -970,6 +989,7 @@ private getEmptyTestSuiteWithCases(suiteId?: string): TestSuiteWithCasesResponse
   ).subscribe({
     next: allCases => {
       this.versionTestCases.set(allCases);
+      this.ensureStepsForCases();
       this.showStartTesting = true;
       this.showViewTestCases = false;
       this.initializeFormForTestCases();
