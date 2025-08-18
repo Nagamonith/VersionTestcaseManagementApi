@@ -112,6 +112,7 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
   // Suite selection
   selectedSuiteIds: string[] = [];
   allSuitesSelected = false;
+  
 
   // Computed properties
   selectedTestSuite = computed(() => {

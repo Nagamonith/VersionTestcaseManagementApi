@@ -15,7 +15,7 @@ import { IdResponse } from 'src/app/shared/modles/product.model';
 interface TestCaseFilter {
   testCaseId: string;
   useCase: string;
-  version: string; // This is still the version string for filtering
+  version: string; 
 }
 
 

@@ -102,14 +102,14 @@
   <p class="info-text">You can select specific suites or run all suites in this test run.</p>
 
   <!-- Select all checkbox -->
-  <div class="select-all-section">
+  <!-- <div class="select-all-section">
     <label>
       <input type="checkbox"
              [checked]="areAllSuitesSelected()"
              (change)="toggleSelectAllSuites($event)">
       Select All Suites ({{ selectedTestRun()?.testSuites?.length }})
     </label>
-  </div>
+  </div> -->
 
   <div class="suite-cards">
     <div *ngFor="let suiteRef of selectedTestRun()?.testSuites"
