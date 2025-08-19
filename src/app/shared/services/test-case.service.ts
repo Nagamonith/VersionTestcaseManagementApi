@@ -534,62 +534,93 @@ export class TestCaseService {
     );
   }
 
-  syncModuleAttributesToTestCases(moduleId: string): Observable<void> {
-    if (!moduleId) {
-      return throwError(() => new Error('Module ID is required'));
-    }
-    
-    return this.moduleService.getModuleAttributes(moduleId).pipe(
-      switchMap(moduleAttributes => {
-        return this.getTestCaseDetailByModule(moduleId).pipe(
-          switchMap(testCases => {
-            if (testCases.length === 0) {
-              return of(void 0);
-            }
-            
-            const updateRequests = testCases.map(testCase => {
-              const currentAttributes = testCase.attributes || [];
-              
-              const newAttributes = moduleAttributes.map(moduleAttr => {
-                const existingAttr = currentAttributes.find(a => a.key === moduleAttr.key);
-                
-                return {
-                  key: moduleAttr.key,
-                  value: existingAttr?.value || ''
-                };
-              });
+// Fixed TestCaseService - Sync Module Attributes Method
+// Replace the existing syncModuleAttributesToTestCases method in your TestCaseService
 
-              const nonModuleAttributes = currentAttributes.filter(
-                attr => !moduleAttributes.some(mAttr => mAttr.key === attr.key)
-              );
-              
-              const mergedAttributes = [...newAttributes, ...nonModuleAttributes];
-
-              return this.updateTestCaseAttributes(
-                moduleId, 
-                testCase.id, 
-                mergedAttributes.map(a => ({ 
-                  key: a.key, 
-                  value: a.value 
-                }))
-              ).pipe(
-                catchError(error => {
-                  console.error(`Error updating attributes for test case ${testCase.id}:`, error);
-                  return of(null);
-                })
-              );
-            });
-            
-            return forkJoin(updateRequests).pipe(map(() => void 0));
-          })
-        );
-      }),
-      catchError(error => {
-        console.error('Error syncing module attributes:', error);
-        return throwError(() => new Error('Failed to sync module attributes'));
-      })
-    );
+syncModuleAttributesToTestCases(moduleId: string): Observable<void> {
+  if (!moduleId) {
+    return throwError(() => new Error('Module ID is required'));
   }
+  
+  console.log('Starting sync of module attributes to test cases for module:', moduleId);
+  
+  return this.moduleService.getModuleAttributes(moduleId).pipe(
+    tap(moduleAttributes => {
+      console.log('Module attributes to sync:', moduleAttributes);
+    }),
+    switchMap(moduleAttributes => {
+      if (moduleAttributes.length === 0) {
+        console.log('No module attributes to sync');
+        return of(void 0);
+      }
+      
+      return this.getTestCaseDetailByModule(moduleId).pipe(
+        tap(testCases => {
+          console.log('Test cases to update:', testCases.length);
+        }),
+        switchMap(testCases => {
+          if (testCases.length === 0) {
+            console.log('No test cases to update');
+            return of(void 0);
+          }
+          
+          const updateRequests = testCases.map(testCase => {
+            const currentAttributes = testCase.attributes || [];
+            console.log(`Processing test case ${testCase.testCaseId} with current attributes:`, currentAttributes);
+            
+            // Create attributes based on module attributes
+            const newAttributes = moduleAttributes.map(moduleAttr => {
+              const existingAttr = currentAttributes.find(a => a.key === moduleAttr.key);
+              
+              return {
+                key: moduleAttr.key,
+                value: existingAttr?.value || (moduleAttr.isRequired ? '' : '')
+              };
+            });
+
+            // Keep non-module attributes (custom attributes added directly to test case)
+            const nonModuleAttributes = currentAttributes.filter(
+              attr => !moduleAttributes.some(mAttr => mAttr.key === attr.key)
+            );
+            
+            // Merge all attributes
+            const mergedAttributes = [...newAttributes, ...nonModuleAttributes];
+            console.log(`Merged attributes for test case ${testCase.testCaseId}:`, mergedAttributes);
+
+            return this.updateTestCaseAttributes(
+              moduleId, 
+              testCase.id, 
+              mergedAttributes.map(a => ({ 
+                key: a.key, 
+                value: a.value || ''
+              }))
+            ).pipe(
+              tap(() => {
+                console.log(`Successfully updated attributes for test case: ${testCase.testCaseId}`);
+              }),
+              catchError(error => {
+                console.error(`Error updating attributes for test case ${testCase.id} (${testCase.testCaseId}):`, error);
+                // Don't fail the entire operation for one test case
+                return of(null);
+              })
+            );
+          });
+          
+          return forkJoin(updateRequests).pipe(
+            map(() => {
+              console.log('Completed syncing module attributes to all test cases');
+              return void 0;
+            })
+          );
+        })
+      );
+    }),
+    catchError(error => {
+      console.error('Error syncing module attributes:', error);
+      return throwError(() => new Error(`Failed to sync module attributes: ${error.message}`));
+    })
+  );
+}
 }
 
 export type { ProductModule };

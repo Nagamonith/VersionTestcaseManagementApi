@@ -232,84 +232,141 @@
   </div>
 
   <!-- Module Attributes Modal -->
-  <div *ngIf="showModuleAttributesForm()" class="form-overlay">
-    <div class="test-case-form">
-      <h3>Manage Module Attributes</h3>
-      
-      <!-- Attributes List -->
-      <div *ngIf="!currentModuleAttribute()">
-        <table class="attributes-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Key</th>
-              <th>Type</th>
-              <th>Required</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let attr of moduleAttributes()">
-              <td>{{ attr.name }}</td>
-              <td>{{ attr.key }}</td>
-              <td>{{ attr.type }}</td>
-              <td>{{ attr.isRequired ? 'Yes' : 'No' }}</td>
-              <td>
-                <button class="btn-small" (click)="editModuleAttribute(attr)">Edit</button>
-                <button class="btn-small-danger" 
-                        (click)="deleteModuleAttribute(attr.id)"
-                        *ngIf="attr.id">
-                  Delete
-                </button>
-                <span *ngIf="!attr.id" class="no-delete-message">Cannot delete (no ID)</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        
-        <div class="form-actions">
-          <button class="btn-save" (click)="addModuleAttribute()">Add New Attribute</button>
-          <button class="btn-small-danger" (click)="closeModuleAttributeForm()">Close</button>
-        </div>
+<div *ngIf="showModuleAttributesForm()" class="form-overlay">
+  <div class="test-case-form">
+    <h3>Manage Module Attributes</h3>
+    
+    <!-- Loading indicator -->
+    <div *ngIf="loading()" class="loading-indicator">
+      <p>Processing... Please wait.</p>
+    </div>
+    
+    <!-- Attributes List -->
+    <div *ngIf="!currentModuleAttribute() && !loading()">
+      <div *ngIf="moduleAttributes().length === 0" class="no-attributes">
+        <p>No module attributes found. Create one to get started.</p>
       </div>
       
-      <!-- Attribute Form -->
-      <div *ngIf="currentModuleAttribute()" class="attribute-form">
-        <div class="form-group">
-          <label>Attribute Name:</label>
-          <input type="text" [(ngModel)]="currentModuleAttribute()!.name" required />
-        </div>
-        
-        <div class="form-group">
-          <label>Key (snake_case):</label>
-          <input type="text" [(ngModel)]="currentModuleAttribute()!.key" required />
-        </div>
-        
-        <div class="form-group">
-          <label>Type:</label>
-          <select [(ngModel)]="currentModuleAttribute()!.type">
-            <option value="text">Text</option>
-            <option value="number">Number</option>
-            <option value="checkbox">Checkbox</option>
-            <option value="date">Date</option>
-          </select>
-        </div>
-        
-        <div class="form-group">
-          <label>
-            <input type="checkbox" [(ngModel)]="currentModuleAttribute()!.isRequired" />
-            Required
-          </label>
-        </div>
-        
-        <div class="form-actions">
-          <button class="btn-save" (click)="saveModuleAttribute()" 
-                  [disabled]="!currentModuleAttribute()?.name || !currentModuleAttribute()?.key">
-            Save
-          </button>
-          <button class="btn-small-danger" (click)="closeModuleAttributeForm()">Cancel</button>
-        </div>
+      <table *ngIf="moduleAttributes().length > 0" class="attributes-table">
+       <thead>
+  <tr>
+    <th>Name</th>
+    <th>Key</th>
+    <th>Type</th>
+    <th>Required</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+<tbody>
+  <tr *ngFor="let attr of moduleAttributes(); trackBy: trackByAttributeId">
+    <td>{{ attr.name }}</td>
+    <td><code>{{ attr.key }}</code></td>
+    <td>{{ attr.type || 'text' }}</td>
+    <td>
+      <span class="badge" [class.required]="attr.isRequired" [class.optional]="!attr.isRequired">
+        {{ attr.isRequired ? 'Required' : 'Optional' }}
+      </span>
+    </td>
+    <td class="actions">
+      <button class="btn-small" (click)="editModuleAttribute(attr)" [disabled]="loading()">Edit</button>
+      <button class="btn-small-danger" (click)="deleteModuleAttribute(attr.id)" [disabled]="loading() || !attr.id">Delete</button>
+    </td>
+  </tr>
+</tbody>
+
+      </table>
+      
+      <div class="form-actions">
+        <button 
+          class="btn-save" 
+          (click)="addModuleAttribute()"
+          [disabled]="loading()">
+          ➕ Add New Attribute
+        </button>
+        <button 
+          class="btn-small-danger" 
+          (click)="closeModuleAttributeForm()"
+          [disabled]="loading()">
+          Close
+        </button>
+      </div>
+    </div>
+    
+    <!-- Attribute Form -->
+    <div *ngIf="currentModuleAttribute() && !loading()" class="attribute-form">
+      <h4>{{ currentModuleAttribute()!.id ? 'Edit' : 'Add' }} Module Attribute</h4>
+      
+      <div class="form-group">
+        <label for="attr-name">Attribute Name: <span class="required">*</span></label>
+        <input 
+          id="attr-name"
+          type="text" 
+          [(ngModel)]="currentModuleAttribute()!.name" 
+          placeholder="Enter a descriptive name"
+          required 
+          maxlength="100" />
+        <small class="help-text">This will be displayed as the column header</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="attr-key">Key (snake_case): <span class="required">*</span></label>
+        <input 
+          id="attr-key"
+          type="text" 
+          [(ngModel)]="currentModuleAttribute()!.key" 
+          placeholder="e.g., priority_level, test_environment"
+          required 
+          pattern="^[a-z_][a-z0-9_]*$"
+          maxlength="50" />
+        <small class="help-text">Used internally. Use lowercase letters, numbers, and underscores only</small>
+      </div>
+      
+      <div class="form-group">
+        <label for="attr-type">Type:</label>
+        <select id="attr-type" [(ngModel)]="currentModuleAttribute()!.type">
+          <option value="text">Text</option>
+          <option value="number">Number</option>
+          <option value="checkbox">Checkbox</option>
+          <option value="date">Date</option>
+          <option value="select">Select (Dropdown)</option>
+        </select>
+      </div>
+      
+      <div class="form-group" *ngIf="currentModuleAttribute()!.type === 'select'">
+        <label for="attr-options">Options:</label>
+        <textarea 
+          id="attr-options"
+          [(ngModel)]="currentModuleAttribute()!.options" 
+          placeholder="Enter comma-separated values: Low, Medium, High&#10;Or JSON array: [&quot;Low&quot;, &quot;Medium&quot;, &quot;High&quot;]"
+          rows="3"></textarea>
+        <small class="help-text">For dropdown options. Use comma-separated values or JSON array format</small>
+      </div>
+      
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input 
+            type="checkbox" 
+            [(ngModel)]="currentModuleAttribute()!.isRequired" />
+          <span class="checkbox-text">Required field</span>
+        </label>
+        <small class="help-text">If checked, this field must be filled for each test case</small>
+      </div>
+      
+      <div class="form-actions">
+        <button 
+          class="btn-save" 
+          (click)="saveModuleAttribute()" 
+          [disabled]="!currentModuleAttribute()?.name?.trim() || !currentModuleAttribute()?.key?.trim()">
+          {{ currentModuleAttribute()!.id ? 'Update' : 'Save' }} Attribute
+        </button>
+        <button 
+          type="button" 
+          class="btn-small-danger" 
+          (click)="closeModuleAttributeForm()">
+          Cancel
+        </button>
       </div>
     </div>
   </div>
+</div>
 </div>

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { environment } from 'src/environments/environment';
 import { 
   ProductModule, 
@@ -9,7 +9,7 @@ import {
   UpdateModuleRequest 
 } from 'src/app/shared/modles/module.model';
 import { Observable, throwError } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, tap } from 'rxjs/operators';
 import { IdResponse } from '../modles/product.model';
 
 @Injectable({
@@ -103,72 +103,105 @@ export class ModuleService {
   }
 
   // Module Attributes endpoints
-  getModuleAttributes(moduleId: string): Observable<ModuleAttribute[]> {
-    if (!moduleId) {
-      return throwError(() => new Error('Module ID is required'));
-    }
-    
-    return this.http.get<ModuleAttribute[]>(
-      `${this.apiUrl}/modules/${moduleId}/attributes`
-    ).pipe(
-      catchError(error => {
-        console.error('Error fetching module attributes:', error);
-        return throwError(() => new Error('Failed to fetch module attributes'));
-      })
-    );
+ getModuleAttributes(moduleId: string): Observable<ModuleAttribute[]> {
+  if (!moduleId) {
+    return throwError(() => new Error('Module ID is required'));
   }
+  
+  return this.http.get<ModuleAttribute[]>(
+    `${this.apiUrl}/modules/${moduleId}/attributes`  // Fixed: Using full API URL
+  ).pipe(
+    tap(attributes => {
+      console.log('Loaded module attributes:', attributes);
+    }),
+    catchError(error => {
+      console.error('Error fetching module attributes:', error);
+      return throwError(() => new Error('Failed to fetch module attributes'));
+    })
+  );
+}
+createModuleAttribute(
+  moduleId: string, 
+  request: ModuleAttributeRequest
+): Observable<IdResponse> {
+  if (!moduleId) {
+    return throwError(() => new Error('Module ID is required'));
+  }
+  
+  console.log('Creating module attribute:', request);
+  
+  return this.http.post<IdResponse>(
+    `${this.apiUrl}/modules/${moduleId}/attributes`, 
+    request,
+    {
+      headers: new HttpHeaders({
+        'Content-Type': 'application/json'
+      })
+    }
+  ).pipe(
+    tap(response => {
+      console.log('Module attribute created:', response);
+    }),
+    catchError(error => {
+      console.error('Error creating module attribute:', error);
+      // Extract more specific error message
+      const errorMessage = error.error?.message || error.error || 'Failed to create module attribute';
+      return throwError(() => new Error(errorMessage));
+    })
+  );
+}
 
-  createModuleAttribute(
-    moduleId: string, 
-    request: ModuleAttributeRequest
-  ): Observable<IdResponse> {
-    if (!moduleId) {
-      return throwError(() => new Error('Module ID is required'));
-    }
-    
-    return this.http.post<IdResponse>(
-      `${this.apiUrl}/modules/${moduleId}/attributes`, 
-      request
-    ).pipe(
-      catchError(error => {
-        console.error('Error creating module attribute:', error);
-        return throwError(() => new Error(error.error?.message || 'Failed to create module attribute'));
-      })
-    );
+ updateModuleAttribute(
+  moduleId: string, 
+  attributeId: string, 
+  request: ModuleAttributeRequest
+): Observable<ModuleAttribute> {
+  if (!moduleId || !attributeId) {
+    return throwError(() => new Error('Module ID and Attribute ID are required'));
   }
+  
+  console.log('Updating module attribute:', attributeId, request);
+  
+  return this.http.put<ModuleAttribute>(
+    `${this.apiUrl}/modules/${moduleId}/attributes/${attributeId}`, 
+    request,
+    {
+      headers: new HttpHeaders({
+        'Content-Type': 'application/json'
+      })
+    }
+  ).pipe(
+    tap(response => {
+      console.log('Module attribute updated:', response);
+    }),
+    catchError(error => {
+      console.error('Error updating module attribute:', error);
+      return throwError(() => new Error('Failed to update module attribute'));
+    })
+  );
+}deleteModuleAttribute(moduleId: string, attributeId: string): Observable<void> {
+  if (!moduleId) {
+    return throwError(() => new Error('Module ID is required'));
+  }
+  
+  if (!attributeId) {
+    return throwError(() => new Error('Attribute ID is required'));
+  }
+  
+  console.log('Deleting module attribute:', attributeId);
+  
+  return this.http.delete<void>(
+    `${this.apiUrl}/modules/${moduleId}/attributes/${attributeId}`
+  ).pipe(
+    tap(() => {
+      console.log('Module attribute deleted successfully:', attributeId);
+    }),
+    catchError(error => {
+      console.error('Error deleting module attribute:', error);
+      const errorMessage = error.error?.message || error.error || 'Failed to delete module attribute';
+      return throwError(() => new Error(errorMessage));
+    })
+  );
+}
 
-  updateModuleAttribute(
-    moduleId: string, 
-    attributeId: string, 
-    attribute: ModuleAttributeRequest
-  ): Observable<ModuleAttribute> {
-    if (!moduleId || !attributeId) {
-      return throwError(() => new Error('Module ID and Attribute ID are required'));
-    }
-    
-    return this.http.put<ModuleAttribute>(
-      `${this.apiUrl}/modules/${moduleId}/attributes/${attributeId}`, 
-      attribute
-    ).pipe(
-      catchError(error => {
-        console.error('Error updating module attribute:', error);
-        return throwError(() => new Error('Failed to update module attribute'));
-      })
-    );
-  }
-
-  deleteModuleAttribute(moduleId: string, attributeId: string): Observable<void> {
-    if (!moduleId || !attributeId) {
-      return throwError(() => new Error('Module ID and Attribute ID are required'));
-    }
-    
-    return this.http.delete<void>(
-      `${this.apiUrl}/modules/${moduleId}/attributes/${attributeId}`
-    ).pipe(
-      catchError(error => {
-        console.error('Error deleting module attribute:', error);
-        return throwError(() => new Error('Failed to delete module attribute'));
-      })
-    );
-  }
 }
