@@ -781,3 +781,120 @@ input[type="checkbox"] {
     flex: 1 0 auto;
   }
 }
+/* Suite Cards Container */
+.suite-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Individual Suite Card */
+.suite-card {
+  background: #fff;
+  border: 1px solid #e1e4e8;
+  border-radius: 5px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Fixes flexbox overflow issues */
+  transition: all 0.2s ease;
+}
+
+.suite-card:hover {
+  border-color: #c8e1ff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.suite-card.selected {
+  border-color: #0366d6;
+  background-color: #f5f9ff;
+  box-shadow: 0 0 0 1px #0366d6;
+}
+
+/* Suite Header */
+.suite-header {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 6px;
+  min-width: 0; /* Fixes flexbox overflow issues */
+  gap: 6px;
+}
+
+.suite-header h5 {
+  margin: 0;
+  font-size: 13px;
+  color: #0366d6;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+}
+
+/* Status badges */
+.status-badge {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 2px;
+}
+
+.status-badge.complete {
+  background-color: #28a745;
+}
+
+.status-badge.in-progress {
+  background-color: #ffc107;
+}
+
+.status-badge.not-started {
+  background-color: #6c757d;
+}
+
+/* Suite Description */
+.suite-card p {
+  margin: 6px 0;
+  color: #586069;
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-grow: 1;
+}
+
+/* Suite Stats */
+.suite-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px dashed #eaecef;
+  font-size: 11px;
+  color: #6a737d;
+}
+
+/* Visually hidden radio (for accessibility) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .suite-cards {
+    grid-template-columns: 1fr;
+  }
+}
