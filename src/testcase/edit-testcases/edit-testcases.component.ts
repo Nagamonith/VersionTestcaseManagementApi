@@ -868,35 +868,17 @@ saveModuleAttribute(): void {
     this.showAlertMessage('No attribute to save', 'error');
     return;
   }
-  
-  // Validate required fields
-  if (!attribute.name?.trim()) {
-    this.showAlertMessage('Attribute name is required', 'error');
-    return;
-  }
-  
-  if (!attribute.key?.trim()) {
-    this.showAlertMessage('Attribute key is required', 'error');
-    return;
-  }
-  
-  // Validate key format (should be snake_case or similar)
-  const keyPattern = /^[A-Z_][a-z0-9_]*$/;
-  if (!keyPattern.test(attribute.key)) {
-    this.showAlertMessage('Key should contain only lowercase letters, numbers, and underscores, starting with a letter or underscore', 'error');
-    return;
-  }
 
+  // 🚫 Removed all frontend validation
   const request: ModuleAttributeRequest = {
-    name: attribute.name.trim(),
-    key: attribute.key.trim(),
+    name: attribute.name || '',
+    key: attribute.key || '',
     type: attribute.type || 'text',
     isRequired: attribute.isRequired || false,
-    
   };
 
-  console.log('Saving module attribute:', request);
-  
+  console.log('Saving module attribute (no FE validation):', request);
+
   const isUpdate = !!(attribute.id && attribute.id.trim());
   const operation = isUpdate
     ? this.moduleService.updateModuleAttribute(this.selectedModule(), attribute.id!, request)
@@ -905,21 +887,16 @@ saveModuleAttribute(): void {
   const operationType = isUpdate ? 'updated' : 'created';
 
   this.loading.set(true);
-  
+
   operation.pipe(
     takeUntil(this.destroy$)
   ).subscribe({
     next: (response) => {
       console.log(`Module attribute ${operationType} successfully:`, response);
       this.showAlertMessage(`Attribute ${operationType} successfully`, 'success');
-      
-      // Reset the current attribute
       this.currentModuleAttribute.set(null);
-      
-      // Reload module attributes
       this.loadModuleAttributes(this.selectedModule());
-      
-      // Sync attributes to all test cases in this module
+
       this.testCaseService.syncModuleAttributesToTestCases(this.selectedModule()).pipe(
         takeUntil(this.destroy$),
         catchError(err => {
@@ -928,8 +905,6 @@ saveModuleAttribute(): void {
           return of(void 0);
         })
       ).subscribe(() => {
-        console.log('Attributes synced to test cases successfully');
-        // Reload test cases to reflect new attributes
         this.loadTestCases(this.selectedModule());
         this.loading.set(false);
       });
@@ -937,16 +912,15 @@ saveModuleAttribute(): void {
     error: (error) => {
       console.error(`Error ${operationType.slice(0, -1)}ing attribute:`, error);
       let errorMessage = `Failed to ${operationType.slice(0, -1)} attribute`;
-      
       if (error?.message) {
         errorMessage += `: ${error.message}`;
       }
-      
       this.showAlertMessage(errorMessage, 'error');
       this.loading.set(false);
     }
   });
 }
+
 trackByAttributeId(index: number, attribute: any): string {
   return attribute.id || index;
 }
