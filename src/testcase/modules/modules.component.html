@@ -43,7 +43,7 @@
     <!-- Test Runs -->
     <ng-container *ngIf="showTestRuns">
       <option *ngFor="let run of testRuns()" [value]="run.id">
-        {{ run.name }} ({{ run.status }})
+        {{ run.name }} 
       </option>
     </ng-container>
 
@@ -81,7 +81,7 @@
 <!-- Test Run Info -->
 <div *ngIf="showTestRuns && selectedTestRunId() && selectedTestRun()" class="run-info">
   <h4>{{ selectedTestRun()?.name }}</h4>
-  <p>Status: <span class="status-badge" [class]="selectedTestRun()?.status">{{ selectedTestRun()?.status }}</span></p>
+  <!-- <p>Status: <span class="status-badge" [class]="selectedTestRun()?.status">{{ selectedTestRun()?.status }}</span></p> -->
   <p>Contains {{ selectedTestRun()?.testSuites?.length || 0 }} test suites</p>
   <div *ngIf="testRunProgress().total > 0" class="progress-info">
     Progress: {{ getCompletedCaseCount() }}/{{ getTotalCaseCount() }} test cases completed
@@ -99,7 +99,7 @@
 <!-- Test Run Suites List - Updated -->
 <div *ngIf="showTestRuns && selectedTestRunId() && selectedTestRun()?.testSuites?.length" class="run-suites">
   <h4>Test Suites in this Run</h4>
-  <p class="info-text">You can select specific suites or run all suites in this test run.</p>
+
 
   <!-- Select all checkbox -->
   <!-- <div class="select-all-section">

@@ -2,11 +2,11 @@
 
 <!-- Test Run Results Toggle -->
 <div class="test-run-toggle">
-  <button class="toggle-btn" 
+  <!-- <button class="toggle-btn" 
           [class.active]="!showTestRunResults()"
           (click)="showTestRunResults.set(false)">
     Module Results
-  </button>
+  </button> -->
   <button class="toggle-btn" 
           [class.active]="showTestRunResults()"
           (click)="showTestRunResults.set(true)">
@@ -36,7 +36,7 @@
       <div><strong>Created By:</strong> {{ testRunStats()!.metadata.createdBy }}</div>
       <div><strong>Created At:</strong> {{ testRunStats()!.metadata.createdAt }}</div>
       <div><strong>Updated At:</strong> {{ testRunStats()!.metadata.updatedAt }}</div>
-      <div><strong>Status:</strong> {{ testRunStats()!.metadata.status }}</div>
+      <!-- <div><strong>Status:</strong> {{ testRunStats()!.metadata.status }}</div> -->
     </div>
     
     <div class="stats-grid">
@@ -86,9 +86,9 @@
             <span class="completion">{{ suite.completion }}%</span>
           </div>
           <div class="suite-actions">
-            <button class="view-btn" (click)="$event.stopPropagation(); selectedSuiteId.set(suite.suiteId)">
+            <!-- <button class="view-btn" (click)="$event.stopPropagation(); selectedSuiteId.set(suite.suiteId)">
               View
-            </button>
+            </button> -->
             <button class="export-btn" (click)="$event.stopPropagation(); exportSingleSuite(suite.suiteId)">
               Export
             </button>

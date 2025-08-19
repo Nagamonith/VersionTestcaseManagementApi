@@ -20,7 +20,8 @@
                   [disabled]="modules().length === 0">
             <option [ngValue]="null">-- Choose Module --</option>
             <option *ngFor="let module of modules()" [ngValue]="module.id">
-              {{ module.name }} (v{{ module.version }})
+              {{ module.name }} 
+              <!-- ({{ module.version }}) -->
             </option>
           </select>
           <span class="select-arrow">▼</span>
