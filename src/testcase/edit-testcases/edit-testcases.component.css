@@ -126,8 +126,10 @@ tbody tr:hover {
 }
 
 .btn-small-back {
-  background-color: #0a58ca;
+  background-color: #236fe0;
   color: #fff;
+  border-radius: 80px;
+  margin-right: 8px;
 }
 
 .btn-small-back:hover {
@@ -225,19 +227,25 @@ textarea {
   font-size: 14px;
 }
 
-/* Form actions */
+
 .form-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 24px; 
+   padding-top: 20px;
   border-top: 1px solid #e0e0e0;
 }
 
-.actions {
+ .actions {
   display: flex;
   gap: 6px;
+}
+.test-case-table td.actions {
+  display: flex;
+  flex-direction: column;  
+   gap: 6px;                
+  align-items: flex-start;
 }
 
 /* Responsive */
