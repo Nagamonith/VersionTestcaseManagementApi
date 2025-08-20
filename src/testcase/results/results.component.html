@@ -115,19 +115,33 @@
         </tr>
       </thead>
       <tbody>
-        <tr *ngFor="let testCase of getTestCasesForSuite(suite.suiteId)" 
+        <tr *ngFor="let testCase of getTestCasesForSuite(suite.suiteId); let i = index" 
             [class.pass-row]="testCase.result === 'Pass'"
             [class.fail-row]="testCase.result === 'Fail'"
             [class.pending-row]="!testCase.result || testCase.result === 'Pending'">
-          <td>{{ testCase.slNo || '-' }}</td>
+          <td>{{ i + 1 }}</td>
           <td>{{ testCase.testCaseId }}</td>
           <td>{{ testCase.useCase }}</td>
           <td>{{ testCase.scenario }}</td>
           <td class="steps-cell">
-            <div *ngFor="let step of testCase.steps">{{ step.steps }}</div>
+            <div *ngIf="testCase.steps && testCase.steps.length > 0; else noSteps">
+              <div *ngFor="let step of testCase.steps" class="step-item">
+                <div><strong>Step {{ step.id }}:</strong> {{ step.steps }}</div>
+              </div>
+            </div>
+            <ng-template #noSteps>
+              <div class="no-data">No steps available</div>
+            </ng-template>
           </td>
           <td>
-            <div *ngFor="let step of testCase.steps">{{ step.expectedResult }}</div>
+            <div *ngIf="testCase.steps && testCase.steps.length > 0; else noExpected">
+              <div *ngFor="let step of testCase.steps" class="expected-item">
+                <div><strong>Expected {{ step.id }}:</strong> {{ step.expectedResult }}</div>
+              </div>
+            </div>
+            <ng-template #noExpected>
+              <div class="no-data">No expected results</div>
+            </ng-template>
           </td>
           <td>{{ testCase.actual || '-' }}</td>
           <td [class]="testCase.result?.toLowerCase() || 'pending'">

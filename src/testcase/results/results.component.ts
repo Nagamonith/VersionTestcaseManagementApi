@@ -7,6 +7,7 @@ import { TestRunService } from 'src/app/shared/services/test-run.service';
 import { TestSuiteService } from 'src/app/shared/services/test-suite.service';
 import { ActivatedRoute } from '@angular/router';
 import { of, BehaviorSubject, switchMap, combineLatest, firstValueFrom, forkJoin, map, catchError } from 'rxjs';
+import { TestCaseDetailResponse } from 'src/app/shared/modles/test-case.model';
 
 @Component({
   selector: 'app-results',
@@ -220,26 +221,60 @@ export class ResultsComponent implements OnInit {
 // Update the loadSuiteTestCases method
 private async loadSuiteTestCases(suiteId: string): Promise<void> {
   try {
+    // Use the same approach as ModulesComponent
     const response = await firstValueFrom(
       this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
         catchError(() => of({ testCases: [] }))
       )
     );
 
-    const testCaseDetails = (response.testCases || []).map((tcItem: any) => {
-      const executionDetails = tcItem.executionDetails || {};
-      return {
-        ...tcItem.testCase,
-        actual: executionDetails.actual || tcItem.testCase.actual || '-',
-        result: executionDetails.result || tcItem.testCase.result || 'Pending',
-        remarks: executionDetails.remarks || tcItem.testCase.remarks || '-',
-        executionDetails: executionDetails
-      };
-    });
+    console.log('Test Suite Response:', response);
+
+    const items = response.testCases || [];
+    if (items.length === 0) {
+      this.suiteTestCasesMap.set(new Map([[suiteId, []]]));
+      return;
+    }
+
+    // Fetch detailed test case information for each test case in the suite
+    const detailedTestCases = await forkJoin(
+      items.map((tcItem: any) => {
+        const testCase = tcItem.testCase || tcItem;
+        const executionDetails = tcItem.executionDetails || {};
+        
+        return this.testCaseService.getTestCaseDetail(testCase.moduleId, testCase.id).pipe(
+          map((detail: TestCaseDetailResponse) => {
+            // Merge execution details with test case detail (same as ModulesComponent)
+            const mergedTestCase = {
+              ...detail,
+              result: executionDetails.result || detail.result || 'Pending',
+              actual: executionDetails.actual || detail.actual || '-',
+              remarks: executionDetails.remarks || detail.remarks || '-',
+              executionDetails: executionDetails
+            };
+            
+            return this.convertToResultsFormat(mergedTestCase);
+          }),
+          catchError((error) => {
+            console.error(`Error fetching detail for test case ${testCase.id}:`, error);
+            // Fallback: use basic test case info if detailed fetch fails
+            const fallbackTestCase = {
+              ...testCase,
+              result: executionDetails.result || testCase.result || 'Pending',
+              actual: executionDetails.actual || testCase.actual || '-',
+              remarks: executionDetails.remarks || testCase.remarks || '-',
+              executionDetails: executionDetails,
+              steps: testCase.steps || [] // Try to use whatever steps we have
+            };
+            return of(this.convertToResultsFormat(fallbackTestCase));
+          })
+        );
+      })
+    ).toPromise();
 
     // Update the map with this suite's test cases
     const currentMap = new Map(this.suiteTestCasesMap());
-    currentMap.set(suiteId, testCaseDetails);
+    currentMap.set(suiteId, detailedTestCases || []);
     this.suiteTestCasesMap.set(currentMap);
     
   } catch (error) {
@@ -248,6 +283,38 @@ private async loadSuiteTestCases(suiteId: string): Promise<void> {
     currentMap.set(suiteId, []);
     this.suiteTestCasesMap.set(currentMap);
   }
+}
+private convertToResultsFormat(testCase: any): any {
+  // Ensure steps are properly formatted
+  let steps: any[] = [];
+  
+  if (testCase.steps && Array.isArray(testCase.steps)) {
+    if (testCase.steps.length > 0 && typeof testCase.steps[0] === 'object') {
+      // Already in object format: {steps: string, expectedResult: string}
+      steps = testCase.steps.map((step: any, index: number) => ({
+        id: index + 1,
+        steps: step.steps || step.step || '',
+        expectedResult: step.expectedResult || step.expected || ''
+      }));
+    } else if (typeof testCase.steps[0] === 'string') {
+      // Convert string array to step objects
+      steps = testCase.steps.map((step: string, index: number) => ({
+        id: index + 1,
+        steps: step,
+        expectedResult: Array.isArray(testCase.expected) ? testCase.expected[index] || '' : ''
+      }));
+    }
+  }
+
+  return {
+    ...testCase,
+    slNo: 0, // This will be set by the template using index
+    steps: steps,
+    // Ensure these fields have fallback values
+    actual: testCase.actual || '-',
+    result: testCase.result || 'Pending',
+    remarks: testCase.remarks || '-'
+  };
 }
 
 getTestCasesForSuite(suiteId: string): any[] {
@@ -294,131 +361,146 @@ getTestCasesForSuite(suiteId: string): any[] {
     });
   }
 
-  async exportResults(): Promise<void> {
-    const modules = this.modules();
-    const module = modules.find(m => m.id === this._selectedModule());
-    if (!module) return;
+async exportResults(): Promise<void> {
+  const modules = this.modules();
+  const module = modules.find(m => m.id === this._selectedModule());
+  if (!module) return;
 
-    const testCases = this.filteredTestCases();
+  const testCases = this.filteredTestCases();
 
-    const data = testCases.map((tc, index) => ({
+  const data = testCases.map((tc, index) => {
+    // Extract steps and expected results properly
+    const steps = tc.steps || [];
+    const stepTexts = steps.map((s: any) => s.steps || '').join('\n');
+    const expectedTexts = steps.map((s: any) => s.expectedResult || '').join('\n');
+    
+    return {
       'Sl.No': index + 1,
       'Test Case ID': tc.testCaseId,
       'Use Case': tc.useCase,
       'Scenario': tc.scenario,
-      'Steps': tc.steps?.map((s: any) => s.steps).join('\n') || '',
-      'Expected': tc.steps?.map((s: any) => s.expectedResult).join('\n') || '',
+      'Steps': stepTexts,
+      'Expected': expectedTexts,
       'Result': tc.result || '',
       'Actual': tc.actual || '',
       'Remarks': tc.remarks || '',
-      ...tc.attributes?.reduce((acc: Record<string, string>, attr: any) => {
+      ...(tc.attributes?.reduce((acc: Record<string, string>, attr: any) => {
         acc[attr.key] = attr.value;
         return acc;
-      }, {} as Record<string, string>)
-    }));
+      }, {} as Record<string, string>) || {})
+    };
+  });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Test Results');
-    XLSX.writeFile(wb, `${module.name}_Test_Results.xlsx`);
-  }
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Test Results');
+  XLSX.writeFile(wb, `${module.name}_Test_Results.xlsx`);
+}
 
-  async exportAllTestSuites(): Promise<void> {
-    const stats = this.testRunStats();
-    if (!stats) return;
+async exportAllTestSuites(): Promise<void> {
+  const stats = this.testRunStats();
+  if (!stats) return;
 
-    const wb = XLSX.utils.book_new();
+  const wb = XLSX.utils.book_new();
 
-    // Summary sheet
-    const summaryData = [
-      ['Test Run Name', stats.runName],
-      ['Description', stats.metadata.description],
-      ['Created By', stats.metadata.createdBy],
-      ['Created At', stats.metadata.createdAt],
-      ['Updated At', stats.metadata.updatedAt],
-      ['Status', stats.metadata.status],
-      [],
-      ['Total Test Cases', stats.total],
-      ['Passed', stats.passed],
-      ['Failed', stats.failed],
-      ['Pending', stats.pending],
-      ['Completion %', stats.completion]
-    ];
+  // Summary sheet
+  const summaryData = [
+    ['Test Run Name', stats.runName],
+    ['Description', stats.metadata.description],
+    ['Created By', stats.metadata.createdBy],
+    ['Created At', stats.metadata.createdAt],
+    ['Updated At', stats.metadata.updatedAt],
+    ['Status', stats.metadata.status],
+    [],
+    ['Total Test Cases', stats.total],
+    ['Passed', stats.passed],
+    ['Failed', stats.failed],
+    ['Pending', stats.pending],
+    ['Completion %', stats.completion]
+  ];
 
-    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+  const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+  XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
 
-    // Add sheets for each suite
-    for (const suite of stats.suiteStats) {
-      const suiteResponse = await firstValueFrom(
-        this.testSuiteService.getTestSuiteWithCases(suite.suiteId).pipe(
-          catchError(() => of({ testCases: [] }))
-        )
-      );
-
-      const suiteData = (suiteResponse.testCases || []).map((tcItem: any) => {
-        const testCase = tcItem.testCase;
-        const executionDetails = tcItem.executionDetails || {};
-        
-        return {
-          'Sl.No': testCase.slNo || '',
-          'Test Case ID': testCase.testCaseId,
-          'Use Case': testCase.useCase,
-          'Scenario': testCase.scenario,
-          'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
-          'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
-          'Result': executionDetails.result || testCase.result || 'Pending',
-          'Actual': executionDetails.actual || '',
-          'Remarks': executionDetails.remarks || ''
-        };
-      });
-
-      const suiteWs = XLSX.utils.json_to_sheet(suiteData);
-      XLSX.utils.book_append_sheet(wb, suiteWs, suite.suiteName.substring(0, 31));
-    }
-
-    XLSX.writeFile(wb, `${stats.runName}_All_Test_Suites.xlsx`);
-  }
-
-  async exportSingleSuite(suiteId: string): Promise<void> {
-    const stats = this.testRunStats();
-    if (!stats) return;
-
-    const suite = stats.suiteStats.find((s: any) => s.suiteId === suiteId);
-    if (!suite) return;
-
-    // Use getTestSuiteWithCases instead of getTestCasesForSuite
+  // Add sheets for each suite
+  for (const suite of stats.suiteStats) {
     const suiteResponse = await firstValueFrom(
-      this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+      this.testSuiteService.getTestSuiteWithCases(suite.suiteId).pipe(
         catchError(() => of({ testCases: [] }))
       )
     );
 
-    if (!suiteResponse.testCases || suiteResponse.testCases.length === 0) {
-      alert('No test cases found in this suite');
-      return;
-    }
-
-    const data = suiteResponse.testCases.map((tcItem: any) => {
-      const testCase = tcItem.testCase;
+    const suiteData = (suiteResponse.testCases || []).map((tcItem: any, index: number) => {
+      const testCase = tcItem.testCase || {};
       const executionDetails = tcItem.executionDetails || {};
       
+      // Extract steps and expected results properly
+      const steps = testCase.steps || [];
+      const stepTexts = steps.map((s: any) => s.steps || '').join('\n');
+      const expectedTexts = steps.map((s: any) => s.expectedResult || '').join('\n');
+      
       return {
-        'Sl.No': testCase.slNo || '',
-        'Test Case ID': testCase.testCaseId,
-        'Use Case': testCase.useCase,
-        'Scenario': testCase.scenario,
-        'Steps': testCase.steps?.map((s: any) => s.steps).join('\n') || '',
-        'Expected': testCase.steps?.map((s: any) => s.expectedResult).join('\n') || '',
+        'Sl.No': index + 1,
+        'Test Case ID': testCase.testCaseId || '',
+        'Use Case': testCase.useCase || '',
+        'Scenario': testCase.scenario || '',
+        'Steps': stepTexts,
+        'Expected': expectedTexts,
         'Result': executionDetails.result || testCase.result || 'Pending',
-        'Actual': executionDetails.actual || '',
-        'Remarks': executionDetails.remarks || ''
+        'Actual': executionDetails.actual || testCase.actual || '',
+        'Remarks': executionDetails.remarks || testCase.remarks || ''
       };
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, suite.suiteName.substring(0, 31));
-    XLSX.writeFile(wb, `${suite.suiteName}_Test_Cases.xlsx`);
+    const suiteWs = XLSX.utils.json_to_sheet(suiteData);
+    XLSX.utils.book_append_sheet(wb, suiteWs, suite.suiteName.substring(0, 31));
   }
+
+  XLSX.writeFile(wb, `${stats.runName}_All_Test_Suites.xlsx`);
+}
+async exportSingleSuite(suiteId: string): Promise<void> {
+  const stats = this.testRunStats();
+  if (!stats) return;
+
+  const suite = stats.suiteStats.find((s: any) => s.suiteId === suiteId);
+  if (!suite) return;
+
+  const suiteResponse = await firstValueFrom(
+    this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+      catchError(() => of({ testCases: [] }))
+    )
+  );
+
+  if (!suiteResponse.testCases || suiteResponse.testCases.length === 0) {
+    alert('No test cases found in this suite');
+    return;
+  }
+
+  const data = (suiteResponse.testCases || []).map((tcItem: any, index: number) => {
+    const testCase = tcItem.testCase || {};
+    const executionDetails = tcItem.executionDetails || {};
+    
+    // Extract steps and expected results properly
+    const steps = testCase.steps || [];
+    const stepTexts = steps.map((s: any) => s.steps || '').join('\n');
+    const expectedTexts = steps.map((s: any) => s.expectedResult || '').join('\n');
+    
+    return {
+      'Sl.No': index + 1,
+      'Test Case ID': testCase.testCaseId || '',
+      'Use Case': testCase.useCase || '',
+      'Scenario': testCase.scenario || '',
+      'Steps': stepTexts,
+      'Expected': expectedTexts,
+      'Result': executionDetails.result || testCase.result || 'Pending',
+      'Actual': executionDetails.actual || testCase.actual || '',
+      'Remarks': executionDetails.remarks || testCase.remarks || ''
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, suite.suiteName.substring(0, 31));
+  XLSX.writeFile(wb, `${suite.suiteName}_Test_Cases.xlsx`);
+}
 }
