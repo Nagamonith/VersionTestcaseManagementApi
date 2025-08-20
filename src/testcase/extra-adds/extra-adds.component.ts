@@ -40,6 +40,43 @@ export class ExtraAddsComponent implements OnInit {
   private cdr = inject(ChangeDetectorRef);
   private moduleService = inject(ModuleService);
 
+  openCard(card: 'addProduct' | 'addModule' | 'addVersion' | 'showModules' | 'showProducts' | 'autoSave') {
+    this.closeAllCards();
+    switch (card) {
+      case 'addProduct':
+        this.showAddProductForm = true;
+        break;
+      case 'addModule':
+        this.showAddModuleForm = true;
+        break;
+      case 'addVersion':
+        this.showAddVersionForm = true;
+        break;
+      case 'showModules':
+        this.showModuleList = true;
+        break;
+      case 'showProducts':
+        this.showProducts = true;
+        break;
+      case 'autoSave':
+        this.showAutoSavePopup = true;
+        break;
+    }
+  }
+
+  // Add this method to close all cards
+  closeAllCards() {
+    this.showAddProductForm = false;
+    this.showAddModuleForm = false;
+    this.showAddVersionForm = false;
+    this.showModuleList = false;
+    this.showProducts = false;
+    this.showAutoSavePopup = false;
+    this.showProductSelectorModal = false;
+  }
+
+
+
   // Icons
   // icons = {
   //   plus: faPlus,
