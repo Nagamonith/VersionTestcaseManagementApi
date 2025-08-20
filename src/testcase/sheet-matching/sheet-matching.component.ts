@@ -16,8 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TestCaseService } from 'src/app/shared/services/test-case.service';
 import { ProductService } from 'src/app/shared/services/product.service';
 import { ModuleService } from 'src/app/shared/services/module.service';
-import { AddAttributeDialogComponent } from './add-attribute-dialog.component';
-import { CreateModuleRequest, ModuleAttributeRequest } from 'src/app/shared/modles/module.model';
+import { CreateModuleRequest, ModuleAttributeRequest, ModuleAttribute } from 'src/app/shared/modles/module.model';
 import { CreateTestCaseRequest, ManualTestCaseStep, TestCaseAttributeRequest } from 'src/app/shared/modles/test-case.model';
 import { Product, type ProductVersion, ProductVersionResponse } from 'src/app/shared/modles/product.model';
 import { catchError, firstValueFrom, of } from 'rxjs';
@@ -62,6 +61,7 @@ export class SheetMatchingComponent {
   private productService = inject(ProductService);
   private moduleService = inject(ModuleService);
 
+  // Existing signals
   sheetName = signal<string>('Untitled');
   sheetColumns = signal<string[]>([]);
   sheetData = signal<any[]>([]);
@@ -70,6 +70,33 @@ export class SheetMatchingComponent {
   isProcessing = signal(false);
   errorMessage = signal<string | null>(null);
   currentProduct = signal<Product | null>(null);
+
+  // Module creation signals
+  showModuleForm = signal(false);
+  moduleCreated = signal(false);
+  createdModuleId = signal<string | null>(null);
+  createdModuleName = signal<string>('');
+  
+  // Module form data
+  moduleForm = {
+    name: '',
+    description: '',
+    version: '1.0'
+  };
+
+  // Module attributes signals
+  showModuleAttributesForm = signal(false);
+  moduleAttributes = signal<ModuleAttribute[]>([]);
+  currentModuleAttribute = signal<ModuleAttribute | null>(null);
+  
+  // New module attribute form
+  newModuleAttribute = {
+    name: '',
+    key: '',
+    type: 'text',
+    isRequired: false,
+    options: ''
+  };
 
   coreMappings = signal<FieldMapping[]>([
     { field: 'testCaseId', label: 'Test Case ID', mappedTo: '', required: true },
@@ -87,14 +114,6 @@ export class SheetMatchingComponent {
   versionMapping = '';
   productVersions: ProductVersion[] = [];
 
-  onVersionMappingChange(value: string): void {
-    this.versionMapping = value;
-    // Update the coreMappings version field mappedTo for preview
-    this.coreMappings.update((mappings: FieldMapping[]) =>
-      mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: value } : m)
-    );
-  }
-
   constructor() {
     const navigation = this.router.getCurrentNavigation();
     const state = navigation?.extras.state;
@@ -105,20 +124,13 @@ export class SheetMatchingComponent {
       this.sheetColumns.set(state['sheetColumns'] || []);
       this.sheetData.set(state['sheetData'] || []);
 
+      // Pre-populate module form with sheet name
+      this.moduleForm.name = this.generateModuleName();
+      this.moduleForm.description = `Module created from imported sheet: ${this.sheetName()}`;
+
       if (state['productId']) {
         this.loadProductDetails(state['productId']);
-        // Load product versions for dropdown
-        this.testCaseService.getProductVersions(state['productId']).subscribe((versions: ProductVersion[]) => {
-          this.productVersions = versions;
-          // Set default version mapping to first product version if available
-          if (!this.versionMapping && versions.length > 0) {
-            this.versionMapping = '__pv__' + versions[0].version;
-            // Also update coreMappings for preview
-            this.coreMappings.update((mappings: FieldMapping[]) =>
-              mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: this.versionMapping } : m)
-            );
-          }
-        });
+        this.loadProductVersions(state['productId']);
       }
 
       setTimeout(() => this.autoMapColumns(), 0);
@@ -135,6 +147,210 @@ export class SheetMatchingComponent {
         this.snackBar.open('Failed to load product details', 'Close', { duration: 3000 });
       }
     });
+  }
+
+  private loadProductVersions(productId: string): void {
+    this.testCaseService.getProductVersions(productId).subscribe({
+      next: (versions: ProductVersion[]) => {
+        this.productVersions = versions;
+        if (!this.versionMapping && versions.length > 0) {
+          this.versionMapping = '__pv__' + versions[0].version;
+          this.coreMappings.update((mappings: FieldMapping[]) =>
+            mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: this.versionMapping } : m)
+          );
+        }
+      },
+      error: (err) => {
+        console.error('Failed to load product versions:', err);
+      }
+    });
+  }
+
+  // Module Creation Methods
+  openModuleForm(): void {
+    this.showModuleForm.set(true);
+  }
+
+  closeModuleForm(): void {
+    this.showModuleForm.set(false);
+  }
+
+  async createModule(): Promise<void> {
+    const product = this.currentProduct();
+    if (!product || !product.id) {
+      this.snackBar.open('No product selected', 'Close', { duration: 3000 });
+      return;
+    }
+
+    if (!this.moduleForm.name.trim()) {
+      this.snackBar.open('Module name is required', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.isProcessing.set(true);
+
+    try {
+      const moduleRequest: CreateModuleRequest = {
+        productId: product.id,
+        name: this.moduleForm.name.trim(),
+        description: this.moduleForm.description.trim(),
+        isActive: true,
+        version: this.moduleForm.version.trim() || '1.0'
+      };
+
+      const module = await firstValueFrom(this.moduleService.createModule(product.id, moduleRequest));
+      
+      if (!module || !module.id) {
+        throw new Error('Failed to create module');
+      }
+
+      this.createdModuleId.set(module.id);
+      this.createdModuleName.set(this.moduleForm.name);
+      this.moduleCreated.set(true);
+      this.showModuleForm.set(false);
+
+      this.snackBar.open(`Module "${this.moduleForm.name}" created successfully!`, 'Close', { duration: 3000 });
+
+      // Load module attributes after creation
+      this.loadModuleAttributes();
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to create module';
+      this.snackBar.open(errorMsg, 'Close', { duration: 5000 });
+      console.error('Module creation error:', error);
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  // Module Attributes Methods
+  openModuleAttributesForm(): void {
+    if (!this.moduleCreated()) {
+      this.snackBar.open('Please create a module first before adding attributes', 'Close', { duration: 3000 });
+      return;
+    }
+    this.showModuleAttributesForm.set(true);
+  }
+
+  closeModuleAttributesForm(): void {
+    this.showModuleAttributesForm.set(false);
+    this.currentModuleAttribute.set(null);
+  }
+
+  addModuleAttribute(): void {
+    this.currentModuleAttribute.set({
+      id: '',
+      moduleId: this.createdModuleId() || '',
+      name: '',
+      key: '',
+      type: 'text',
+      isRequired: false,
+      options: ''
+    });
+  }
+
+  editModuleAttribute(attribute: ModuleAttribute): void {
+    this.currentModuleAttribute.set({ ...attribute });
+  }
+
+  async saveModuleAttribute(): Promise<void> {
+    const attribute = this.currentModuleAttribute();
+    const moduleId = this.createdModuleId();
+    
+    if (!attribute || !moduleId) {
+      this.snackBar.open('No attribute or module available', 'Close', { duration: 3000 });
+      return;
+    }
+
+    if (!attribute.name.trim() || !attribute.key.trim()) {
+      this.snackBar.open('Name and key are required', 'Close', { duration: 3000 });
+      return;
+    }
+
+    // Basic key validation
+    const keyPattern = /^[a-z_][a-z0-9_]*$/;
+    if (!keyPattern.test(attribute.key)) {
+      this.snackBar.open('Key must use lowercase letters, numbers, and underscores only', 'Close', { duration: 3000 });
+      return;
+    }
+
+    this.isProcessing.set(true);
+
+    try {
+      const request: ModuleAttributeRequest = {
+        name: attribute.name.trim(),
+        key: attribute.key.trim(),
+        type: attribute.type,
+        isRequired: attribute.isRequired,
+        options: attribute.options?.trim()
+      };
+
+      const isUpdate = !!(attribute.id && attribute.id.trim());
+      
+      if (isUpdate) {
+        await firstValueFrom(this.moduleService.updateModuleAttribute(moduleId, attribute.id!, request));
+        this.snackBar.open('Attribute updated successfully', 'Close', { duration: 2000 });
+      } else {
+        await firstValueFrom(this.moduleService.createModuleAttribute(moduleId, request));
+        this.snackBar.open('Attribute created successfully', 'Close', { duration: 2000 });
+      }
+
+      this.currentModuleAttribute.set(null);
+      this.loadModuleAttributes();
+
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to save attribute';
+      this.snackBar.open(errorMsg, 'Close', { duration: 5000 });
+      console.error('Save attribute error:', error);
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  async deleteModuleAttribute(attributeId: string): Promise<void> {
+    const moduleId = this.createdModuleId();
+    if (!moduleId || !attributeId) return;
+
+    const confirmDelete = confirm('Are you sure you want to delete this attribute?');
+    if (!confirmDelete) return;
+
+    this.isProcessing.set(true);
+
+    try {
+      await firstValueFrom(this.moduleService.deleteModuleAttribute(moduleId, attributeId));
+      this.snackBar.open('Attribute deleted successfully', 'Close', { duration: 2000 });
+      this.loadModuleAttributes();
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to delete attribute';
+      this.snackBar.open(errorMsg, 'Close', { duration: 5000 });
+      console.error('Delete attribute error:', error);
+    } finally {
+      this.isProcessing.set(false);
+    }
+  }
+
+  private loadModuleAttributes(): void {
+    const moduleId = this.createdModuleId();
+    if (!moduleId) return;
+
+    this.moduleService.getModuleAttributes(moduleId).subscribe({
+      next: (attributes) => {
+        this.moduleAttributes.set(attributes);
+        // Update custom attributes signal for mapping
+        this.customAttributes.set(attributes.map(attr => attr.key));
+      },
+      error: (err) => {
+        console.error('Failed to load module attributes:', err);
+      }
+    });
+  }
+
+  // Existing mapping methods
+  onVersionMappingChange(value: string): void {
+    this.versionMapping = value;
+    this.coreMappings.update((mappings: FieldMapping[]) =>
+      mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: value } : m)
+    );
   }
 
   updateMapping(field: string, column: string): void {
@@ -154,47 +370,20 @@ export class SheetMatchingComponent {
     }));
   }
 
-  openAddAttributeDialog(): void {
-    const dialogRef = this.dialog.open(AddAttributeDialogComponent, {
-      width: '400px',
-      disableClose: true,
-      data: { existing: this.customAttributes() }
-    });
-
-    dialogRef.afterClosed().subscribe(attribute => {
-      if (attribute) {
-        this.customAttributes.update(attrs => [...attrs, attribute]);
-        this.attributeMappings.update(mappings => ({
-          ...mappings,
-          [attribute]: ''
-        }));
-      }
-    });
-  }
-
-  removeCustomAttribute(attr: string): void {
-    this.customAttributes.update(attrs => attrs.filter(a => a !== attr));
-    this.attributeMappings.update(mappings => {
-      const newMappings = { ...mappings };
-      delete newMappings[attr];
-      return newMappings;
-    });
-  }
-
   goBack(): void {
     this.router.navigate(['/tester/import-excel']);
   }
 
   async importTestCases(): Promise<void> {
+    if (!this.moduleCreated()) {
+      this.snackBar.open('Please create a module before importing test cases', 'Close', { duration: 3000 });
+      return;
+    }
+
     this.isProcessing.set(true);
     this.errorMessage.set(null);
 
     try {
-      const product = this.currentProduct();
-      if (!product || !product.id) {
-        throw new Error('No product selected. Please select a product before importing.');
-      }
-
       const missingRequired = this.coreMappings()
         .filter(m => m.required && !m.mappedTo);
 
@@ -202,27 +391,10 @@ export class SheetMatchingComponent {
         throw new Error(`Please map all required fields: ${missingRequired.map(m => m.label).join(', ')}`);
       }
 
-      // Create a new module for these test cases
-      const moduleName = this.generateModuleName();
-      const moduleRequest: CreateModuleRequest = {
-        productId: product.id,
-        name: moduleName,
-        description: `Module created from imported sheet: ${this.sheetName()}`,
-        isActive: true,
-        version: '1.0'
-      };
-
-      // Step 1: Create the module
-      const module = await (await import('rxjs')).firstValueFrom(this.moduleService.createModule(product.id, moduleRequest));
-      if (!module || !module.id) {
-        throw new Error('Failed to create module for import');
-      }
-
-      // Step 2: Create test cases
-      const importResult = await this.createTestCases(module.id);
+      const importResult = await this.createTestCases();
       
       this.snackBar.open(
-        `Successfully imported ${importResult.success} test cases to ${moduleName}. ${importResult.errors} failed.`,
+        `Successfully imported ${importResult.success} test cases. ${importResult.errors} failed.`,
         'Close',
         { duration: 5000 }
       );
@@ -232,7 +404,7 @@ export class SheetMatchingComponent {
       }
 
       // Navigate to the new module
-      this.router.navigate(['/tester/modules', module.id], {
+      this.router.navigate(['/tester/modules', this.createdModuleId()], {
         state: { refresh: true }
       });
 
@@ -245,125 +417,121 @@ export class SheetMatchingComponent {
       this.isProcessing.set(false);
     }
   }
-private generateTestCaseId(): string {
-  // Implement your test case ID generation logic here
-  return `TC-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-}
 
-private parseSteps(row: any): ManualTestCaseStep[] | undefined {
-  const stepsValue = this.getRowValue(row, 'steps');
-  const expectedValue = this.getRowValue(row, 'expectedResult');
-  
-  if (!stepsValue && !expectedValue) {
-    return undefined;
-  }
+  private async createTestCases(): Promise<ImportResult> {
+    const result: ImportResult = {
+      success: 0,
+      errors: 0,
+      errorMessages: []
+    };
 
-  return [{
-    testCaseId: '', // Will be set after creation
-    steps: stepsValue || '',
-    expectedResult: expectedValue || ''
-  }];
-}
+    const moduleId = this.createdModuleId();
+    if (!moduleId) {
+      result.errorMessages.push('No module created');
+      return result;
+    }
 
+    // Get product versions for mapping
+    const product = this.currentProduct();
+    if (!product || !product.id) {
+      result.errorMessages.push('No product selected');
+      return result;
+    }
 
-private async createTestCases(moduleId: string): Promise<ImportResult> {
-  const result: ImportResult = {
-    success: 0,
-    errors: 0,
-    errorMessages: []
-  };
+    const productVersions = await firstValueFrom(
+      this.testCaseService.getProductVersions(product.id).pipe(
+        catchError(() => {
+          result.errorMessages.push('Failed to load product versions');
+          return of([] as ProductVersionResponse[]);
+        })
+      )
+    );
 
-  // Get all product versions upfront to map display versions to GUIDs
-  const product = this.currentProduct();
-  if (!product || !product.id) {
-    result.errorMessages.push('No product selected');
+    for (const [index, row] of this.sheetData().entries()) {
+      try {
+        // Handle version mapping
+        let productVersionId = '';
+        if (this.versionMapping.startsWith('__pv__')) {
+          const versionString = this.versionMapping.replace('__pv__', '');
+          const productVersion = productVersions.find(v => v.version === versionString);
+          if (!productVersion) {
+            throw new Error(`Product version "${versionString}" not found`);
+          }
+          productVersionId = productVersion.id;
+        } else if (this.versionMapping) {
+          const versionString = row[this.versionMapping] || 'Unversioned';
+          const productVersion = productVersions.find(v => v.version === versionString);
+          if (!productVersion) {
+            throw new Error(`Version "${versionString}" not found`);
+          }
+          productVersionId = productVersion.id;
+        } else {
+          if (productVersions.length > 0) {
+            productVersionId = productVersions[0].id;
+          } else {
+            throw new Error('No product versions available');
+          }
+        }
+
+        const testCaseRequest: CreateTestCaseRequest = {
+          moduleId: moduleId,
+          productVersionId: productVersionId,
+          testCaseId: this.getRowValue(row, 'testCaseId') || this.generateTestCaseId(),
+          useCase: this.getRowValue(row, 'useCase') || '',
+          scenario: this.getRowValue(row, 'scenario') || '',
+          testType: 'Manual',
+          testTool: '',
+          steps: this.parseSteps(row),
+          result: this.getRowValue(row, 'result'),
+          actual: this.getRowValue(row, 'actual'),
+          remarks: this.getRowValue(row, 'remarks')
+        };
+
+        const createdTestCase = await firstValueFrom(
+          this.testCaseService.createTestCase(moduleId, testCaseRequest)
+        );
+        
+        // Add custom attributes if mapped
+        await this.addTestCaseAttributes(createdTestCase.id, row);
+        
+        result.success++;
+
+      } catch (error) {
+        result.errors++;
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        result.errorMessages.push(`Row ${index + 1}: ${errorMsg}`);
+        console.error(`Error creating test case at row ${index + 1}:`, error);
+      }
+    }
+
     return result;
   }
 
-  const productVersions = await firstValueFrom(
-    this.testCaseService.getProductVersions(product.id).pipe(
-      catchError(() => {
-        result.errorMessages.push('Failed to load product versions');
-        return of([] as ProductVersionResponse[]);
-      })
-    )
-  );
+  private async addTestCaseAttributes(testCaseId: string, row: any): Promise<void> {
+    const moduleId = this.createdModuleId();
+    if (!moduleId) return;
 
-  for (const [index, row] of this.sheetData().entries()) {
-    try {
-      let productVersionId = '';
-      let versionString = '';
-      if (this.versionMapping.startsWith('__pv__')) {
-        versionString = this.versionMapping.replace('__pv__', '');
-        const productVersion = productVersions.find(v => v.version === versionString);
-        if (!productVersion) {
-          throw new Error(`Product version "${versionString}" not found`);
-        }
-        productVersionId = productVersion.id;
-      } else if (this.versionMapping) {
-        versionString = row[this.versionMapping] || 'Unversioned';
-        const productVersion = productVersions.find(v => v.version === versionString);
-        if (!productVersion) {
-          throw new Error(`Version "${versionString}" not found`);
-        }
-        productVersionId = productVersion.id;
-      } else {
-        if (productVersions.length > 0) {
-          productVersionId = productVersions[0].id;
-          versionString = productVersions[0].version;
-        } else {
-          throw new Error('No product versions available');
-        }
-      }
-
-      const testCaseRequest: CreateTestCaseRequest = {
-        moduleId: moduleId,
-        productVersionId: productVersionId,
-        testCaseId: this.getRowValue(row, 'testCaseId') || this.generateTestCaseId(),
-        useCase: this.getRowValue(row, 'useCase') || '',
-        scenario: row['Scenario'] || '',
-        testType: 'Manual',
-        testTool: row['TestTool'] || '',
-        steps: this.parseSteps(row),
-        result: this.getRowValue(row, 'result'),
-        actual: this.getRowValue(row, 'actual'),
-        remarks: this.getRowValue(row, 'remarks')
-      };
-
-      // Also update the row for preview and export
-      row['Version'] = versionString;
-      row['TestType'] = 'Manual';
-      row['Result'] = this.getRowValue(row, 'result');
-      row['Actual'] = this.getRowValue(row, 'actual');
-      row['Remarks'] = this.getRowValue(row, 'remarks');
-
-      const createdTestCase = await firstValueFrom(
-        this.testCaseService.createTestCase(moduleId, testCaseRequest)
-      );
-      result.success++;
-
-      if (row['Attributes']) {
+    for (const attr of this.moduleAttributes()) {
+      const column = this.attributeMappings()[attr.key];
+      if (column && row[column]) {
         try {
-          await this.addTestCaseAttributes(createdTestCase.id, row['Attributes']);
-        } catch (attrError) {
-          result.errorMessages.push(
-            `Row ${index + 1}: Failed to add attributes - ${attrError instanceof Error ? attrError.message : 'Unknown error'}`
-          );
+          const request: TestCaseAttributeRequest = {
+            key: attr.key,
+            value: row[column].toString()
+          };
+          await firstValueFrom(this.testCaseService.addTestCaseAttribute(moduleId, testCaseId, request));
+        } catch (error) {
+          console.error(`Failed to add attribute ${attr.key} to test case ${testCaseId}:`, error);
         }
       }
-
-    } catch (error) {
-      result.errors++;
-      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      result.errorMessages.push(`Row ${index + 1}: ${errorMsg}`);
-      console.error(`Error creating test case at row ${index + 1}:`, error);
     }
   }
 
-  return result;
-}
+  private generateTestCaseId(): string {
+    return `TC-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+  }
 
-  private prepareSteps(row: any): ManualTestCaseStep[] | undefined {
+  private parseSteps(row: any): ManualTestCaseStep[] | undefined {
     const stepsValue = this.getRowValue(row, 'steps');
     const expectedValue = this.getRowValue(row, 'expectedResult');
     
@@ -372,39 +540,10 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
     }
 
     return [{
-      testCaseId: '', // Will be set after creation
+      testCaseId: '',
       steps: stepsValue || '',
       expectedResult: expectedValue || ''
     }];
-  }
-
-  private async addTestCaseAttributes(testCaseId: string, row: any): Promise<void> {
-    const attributeRequests: TestCaseAttributeRequest[] = [];
-    
-    this.customAttributes().forEach(attr => {
-      const column = this.attributeMappings()[attr];
-      if (column && row[column]) {
-        attributeRequests.push({
-          key: attr,
-          value: row[column]
-        });
-      }
-    });
-
-    if (attributeRequests.length === 0) {
-      return;
-    }
-
-    // Add attributes one by one
-    for (const attr of attributeRequests) {
-      try {
-        // Skipping attribute add here because moduleId is not available in this context
-        // Consider enhancing navigation state to include moduleId so that
-        // addTestCaseAttribute(moduleId, testCaseId, attr) can be called.
-      } catch (error) {
-        console.error(`Failed to add attribute ${attr.key} to test case ${testCaseId}:`, error);
-      }
-    }
   }
 
   public getRowValue(row: any, field: string): string {
@@ -418,11 +557,7 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
         return row[this.versionMapping]?.toString() || '';
       }
     }
-    if (["result", "actual", "remarks"].includes(field)) {
-      const mapping = this.coreMappings().find(m => m.field === field);
-      if (!mapping || !mapping.mappedTo) return '';
-      return row[mapping.mappedTo]?.toString() || '';
-    }
+    
     const mapping = this.coreMappings().find(m => m.field === field);
     if (!mapping || !mapping.mappedTo) return '';
     return row[mapping.mappedTo]?.toString() || '';
@@ -441,7 +576,6 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
 
     this.coreMappings.update(mappings =>
       mappings.map(mapping => {
-        // Try exact matches first
         const exactMatch = availableColumns.findIndex(col => 
           col === mapping.label.toLowerCase().trim() ||
           col === mapping.field.toLowerCase().trim()
@@ -451,7 +585,6 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
           return { ...mapping, mappedTo: this.sheetColumns()[exactMatch] };
         }
 
-        // Try partial matches if no exact match found
         const partialMatch = availableColumns.findIndex(col => 
           col.includes(mapping.label.toLowerCase().trim()) ||
           col.includes(mapping.field.toLowerCase().trim())
