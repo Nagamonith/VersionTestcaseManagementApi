@@ -19,7 +19,7 @@ import { ModuleService } from 'src/app/shared/services/module.service';
 import { AddAttributeDialogComponent } from './add-attribute-dialog.component';
 import { CreateModuleRequest, ModuleAttributeRequest } from 'src/app/shared/modles/module.model';
 import { CreateTestCaseRequest, ManualTestCaseStep, TestCaseAttributeRequest } from 'src/app/shared/modles/test-case.model';
-import { Product, ProductVersion, ProductVersionResponse } from 'src/app/shared/modles/product.model';
+import { Product, type ProductVersion, ProductVersionResponse } from 'src/app/shared/modles/product.model';
 import { catchError, firstValueFrom, of } from 'rxjs';
 
 interface FieldMapping {
@@ -81,6 +81,17 @@ export class SheetMatchingComponent {
     { field: 'testType', label: 'Test Type', mappedTo: '', required: false }
   ]);
 
+  versionMapping = '';
+  productVersions: ProductVersion[] = [];
+
+  onVersionMappingChange(value: string): void {
+    this.versionMapping = value;
+    // Update the coreMappings version field mappedTo for preview
+    this.coreMappings.update((mappings: FieldMapping[]) =>
+      mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: value } : m)
+    );
+  }
+
   constructor() {
     const navigation = this.router.getCurrentNavigation();
     const state = navigation?.extras.state;
@@ -93,6 +104,18 @@ export class SheetMatchingComponent {
 
       if (state['productId']) {
         this.loadProductDetails(state['productId']);
+        // Load product versions for dropdown
+        this.testCaseService.getProductVersions(state['productId']).subscribe((versions: ProductVersion[]) => {
+          this.productVersions = versions;
+          // Set default version mapping to first product version if available
+          if (!this.versionMapping && versions.length > 0) {
+            this.versionMapping = '__pv__' + versions[0].version;
+            // Also update coreMappings for preview
+            this.coreMappings.update((mappings: FieldMapping[]) =>
+              mappings.map((m: FieldMapping) => m.field === 'version' ? { ...m, mappedTo: this.versionMapping } : m)
+            );
+          }
+        });
       }
 
       setTimeout(() => this.autoMapColumns(), 0);
@@ -265,34 +288,51 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
 
   for (const [index, row] of this.sheetData().entries()) {
     try {
-      // Get version from row or use default
-      const versionDisplayString = row['Version'] || 'Unversioned';
-      
-      // Find matching product version
-      const productVersion = productVersions.find(v => v.version === versionDisplayString);
-      if (!productVersion) {
-        throw new Error(`Version "${versionDisplayString}" not found`);
+      let productVersionId = '';
+      let versionString = '';
+      if (this.versionMapping.startsWith('__pv__')) {
+        versionString = this.versionMapping.replace('__pv__', '');
+        const productVersion = productVersions.find(v => v.version === versionString);
+        if (!productVersion) {
+          throw new Error(`Product version "${versionString}" not found`);
+        }
+        productVersionId = productVersion.id;
+      } else if (this.versionMapping) {
+        versionString = row[this.versionMapping] || 'Unversioned';
+        const productVersion = productVersions.find(v => v.version === versionString);
+        if (!productVersion) {
+          throw new Error(`Version "${versionString}" not found`);
+        }
+        productVersionId = productVersion.id;
+      } else {
+        if (productVersions.length > 0) {
+          productVersionId = productVersions[0].id;
+          versionString = productVersions[0].version;
+        } else {
+          throw new Error('No product versions available');
+        }
       }
 
-      // Prepare test case data
       const testCaseRequest: CreateTestCaseRequest = {
         moduleId: moduleId,
-        productVersionId: productVersion.id,
+        productVersionId: productVersionId,
         testCaseId: row['TestCaseID'] || this.generateTestCaseId(),
         useCase: row['UseCase'] || '',
         scenario: row['Scenario'] || '',
-        testType: row['TestType'] || 'Manual',
+        testType: 'Manual',
         testTool: row['TestTool'] || '',
         steps: this.parseSteps(row)
       };
 
-      // Create the test case
+      // Also update the row for preview and export
+      row['Version'] = versionString;
+      row['TestType'] = 'Manual';
+
       const createdTestCase = await firstValueFrom(
         this.testCaseService.createTestCase(moduleId, testCaseRequest)
       );
       result.success++;
 
-      // Add attributes if present in the row
       if (row['Attributes']) {
         try {
           await this.addTestCaseAttributes(createdTestCase.id, row['Attributes']);
@@ -307,8 +347,6 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
       result.errors++;
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       result.errorMessages.push(`Row ${index + 1}: ${errorMsg}`);
-      
-      // Log detailed error for debugging
       console.error(`Error creating test case at row ${index + 1}:`, error);
     }
   }
@@ -360,7 +398,17 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
     }
   }
 
-  private getRowValue(row: any, field: string): string {
+  public getRowValue(row: any, field: string): string {
+    if (field === 'testType') {
+      return 'Manual';
+    }
+    if (field === 'version') {
+      if (this.versionMapping.startsWith('__pv__')) {
+        return this.versionMapping.replace('__pv__', '');
+      } else if (this.versionMapping) {
+        return row[this.versionMapping]?.toString() || '';
+      }
+    }
     const mapping = this.coreMappings().find(m => m.field === field);
     if (!mapping || !mapping.mappedTo) return '';
     return row[mapping.mappedTo]?.toString() || '';

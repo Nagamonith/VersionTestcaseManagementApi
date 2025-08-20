@@ -2,7 +2,16 @@
   <div class="sheet-header">
     <h2 class="sheet-title">
       <mat-icon>description</mat-icon>
-      Mapping Sheet: <strong>{{ sheetName() }}</strong>
+      Mapping Sheet:
+      <input
+        class="editable-sheet-name"
+        type="text"
+        [ngModel]="sheetName()"
+        (ngModelChange)="sheetName.set($event)"
+        style="font-weight:bold; font-size:1.1em; border:none; border-bottom:1px solid #ccc; background:transparent; width: 220px; margin-left: 8px;"
+        maxlength="50"
+        title="Edit sheet name before saving"
+      />
     </h2>
     <div class="product-context-banner" *ngIf="currentProduct()">
   <mat-icon>category</mat-icon>
@@ -29,6 +38,7 @@
         <span class="column-subtitle">{{ sheetColumns().length }} columns detected</span>
       </div>
       
+
       <div *ngFor="let field of coreMappings()" class="field-item" [class.mapped]="field.mappedTo">
         <div class="field-header">
           <div>
@@ -38,15 +48,34 @@
           </div>
           <span *ngIf="field.mappedTo" class="mapped-badge">Mapped</span>
         </div>
-        
-        <select
-          class="field-select"
-          [ngModel]="field.mappedTo"
-          (ngModelChange)="updateMapping(field.field, $event)"
-        >
-          <option value="">-- Select Column --</option>
-          <option *ngFor="let col of sheetColumns()" [value]="col">{{ col }}</option>
-        </select>
+        <ng-container *ngIf="field.field === 'version'; else testTypeOrNormalField">
+          <select
+            class="field-select"
+            [ngModel]="versionMapping"
+            (ngModelChange)="onVersionMappingChange($event)"
+          >
+            <option value="">-- Select Version Column or Product Version --</option>
+            <option *ngFor="let col of sheetColumns()" [value]="col">Column: {{ col }}</option>
+            <option *ngFor="let v of productVersions" [value]="'__pv__' + v.version">Product Version: {{ v.version }}</option>
+          </select>
+        </ng-container>
+        <ng-template #testTypeOrNormalField>
+          <ng-container *ngIf="field.field === 'testType'; else normalField">
+            <select class="field-select" disabled>
+              <option value="Manual" selected>Manual</option>
+            </select>
+          </ng-container>
+          <ng-template #normalField>
+            <select
+              class="field-select"
+              [ngModel]="field.mappedTo"
+              (ngModelChange)="updateMapping(field.field, $event)"
+            >
+              <option value="">-- Select Column --</option>
+              <option *ngFor="let col of sheetColumns()" [value]="col">{{ col }}</option>
+            </select>
+          </ng-template>
+        </ng-template>
       </div>
 
       <!-- Custom Attributes Section -->
@@ -115,7 +144,7 @@
           <tbody>
             <tr *ngFor="let row of sheetData().slice(0, 3)">
               <td *ngFor="let field of coreMappings()">
-                {{ field.mappedTo ? row[field.mappedTo] : '-' }}
+                {{ getRowValue(row, field.field) || '-' }}
               </td>
               <td *ngFor="let attr of customAttributes()">
                 {{ getAttributeMapping(attr) ? row[getAttributeMapping(attr)] : '-' }}
