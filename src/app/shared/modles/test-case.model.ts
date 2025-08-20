@@ -80,6 +80,9 @@ export interface CreateTestCaseRequest {
   testType: string;
   testTool?: string;
   steps?: ManualTestCaseStep[];
+  result?: string;
+  actual?: string;
+  remarks?: string;
 }
 
 export interface UpdateTestCaseRequest {

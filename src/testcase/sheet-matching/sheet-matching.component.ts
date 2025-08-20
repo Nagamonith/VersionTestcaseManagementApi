@@ -78,7 +78,10 @@ export class SheetMatchingComponent {
     { field: 'steps', label: 'Steps', mappedTo: '', required: true },
     { field: 'expectedResult', label: 'Expected Result', mappedTo: '', required: true },
     { field: 'version', label: 'Version', mappedTo: '', required: false },
-    { field: 'testType', label: 'Test Type', mappedTo: '', required: false }
+    { field: 'testType', label: 'Test Type', mappedTo: '', required: false },
+    { field: 'result', label: 'Result', mappedTo: '', required: false },
+    { field: 'actual', label: 'Actual', mappedTo: '', required: false },
+    { field: 'remarks', label: 'Remarks', mappedTo: '', required: false }
   ]);
 
   versionMapping = '';
@@ -316,17 +319,23 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
       const testCaseRequest: CreateTestCaseRequest = {
         moduleId: moduleId,
         productVersionId: productVersionId,
-        testCaseId: row['TestCaseID'] || this.generateTestCaseId(),
-        useCase: row['UseCase'] || '',
+        testCaseId: this.getRowValue(row, 'testCaseId') || this.generateTestCaseId(),
+        useCase: this.getRowValue(row, 'useCase') || '',
         scenario: row['Scenario'] || '',
         testType: 'Manual',
         testTool: row['TestTool'] || '',
-        steps: this.parseSteps(row)
+        steps: this.parseSteps(row),
+        result: this.getRowValue(row, 'result'),
+        actual: this.getRowValue(row, 'actual'),
+        remarks: this.getRowValue(row, 'remarks')
       };
 
       // Also update the row for preview and export
       row['Version'] = versionString;
       row['TestType'] = 'Manual';
+      row['Result'] = this.getRowValue(row, 'result');
+      row['Actual'] = this.getRowValue(row, 'actual');
+      row['Remarks'] = this.getRowValue(row, 'remarks');
 
       const createdTestCase = await firstValueFrom(
         this.testCaseService.createTestCase(moduleId, testCaseRequest)
@@ -408,6 +417,11 @@ private async createTestCases(moduleId: string): Promise<ImportResult> {
       } else if (this.versionMapping) {
         return row[this.versionMapping]?.toString() || '';
       }
+    }
+    if (["result", "actual", "remarks"].includes(field)) {
+      const mapping = this.coreMappings().find(m => m.field === field);
+      if (!mapping || !mapping.mappedTo) return '';
+      return row[mapping.mappedTo]?.toString() || '';
     }
     const mapping = this.coreMappings().find(m => m.field === field);
     if (!mapping || !mapping.mappedTo) return '';

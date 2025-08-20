@@ -1,3 +1,4 @@
+// ...existing code...
 // import-excel.component.ts
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -19,6 +20,24 @@ import { firstValueFrom } from 'rxjs';
   styleUrls: ['./import-excel.component.css']
 })
 export class ImportExcelComponent {
+  // Helper to get a value from a row by field name, case-insensitive
+  getRowValue(row: any, field: string): string {
+    if (!row || !field) return '';
+    // Try direct
+    if (row[field] !== undefined && row[field] !== null) return row[field].toString();
+    // Try case-insensitive
+    const key = Object.keys(row).find(k => k.toLowerCase() === field.toLowerCase());
+    if (key && row[key] !== undefined && row[key] !== null) return row[key].toString();
+    return '';
+  }
+  cancelFile(fileInput: HTMLInputElement) {
+    fileInput.value = '';
+    this.fileName.set('');
+    this.sheetNames.set([]);
+    this.sheetData.set(null);
+    this.errorMessage.set('');
+    this.isLoading.set(false);
+  }
   fileName = signal<string>('');
   sheetNames = signal<string[]>([]);
   sheetData = signal<Record<string, any[]> | null>(null);
@@ -170,12 +189,15 @@ async saveData() {
         const testCaseRequest: CreateTestCaseRequest = {
           moduleId: moduleId,
           productVersionId: productVersion.id, // Use the GUID here
-          testCaseId: row['TestCaseID'] || this.generateTestCaseId(),
-          useCase: row['UseCase'] || '',
+          testCaseId: row['TestCaseID'] || row['testCaseId'] || this.generateTestCaseId(),
+          useCase: this.getRowValue(row, 'useCase') || '',
           scenario: row['Scenario'] || '',
           testType: row['TestType'] || 'Manual',
           testTool: row['TestTool'] || '',
-          steps: this.parseSteps(row)
+          steps: this.parseSteps(row),
+          result: this.getRowValue(row, 'result'),
+          actual: this.getRowValue(row, 'actual'),
+          remarks: this.getRowValue(row, 'remarks')
         };
 
         const createdTestCase = await firstValueFrom(
