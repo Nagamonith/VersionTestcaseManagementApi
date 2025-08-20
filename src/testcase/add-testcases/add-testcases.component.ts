@@ -155,9 +155,15 @@ exportToExcel(): void {
 
     // Create a worksheet for each version
     Object.entries(testCasesByVersion).forEach(([version, cases]) => {
-      const formattedData = cases.map(tc => {
+      const formattedData = cases.map((tc, index) => {
+        // Format steps with expected results
         const stepText = tc.steps?.map((step: ManualTestCaseStep, idx: number) =>
-          `${idx + 1}. ${step.steps} → ${step.expectedResult}`
+          `${idx + 1}. ${step.steps}`
+        ).join('\n') || '';
+
+        // Format expected results separately
+        const expectedResults = tc.steps?.map((step: ManualTestCaseStep, idx: number) =>
+          `${idx + 1}. ${step.expectedResult}`
         ).join('\n') || '';
 
         const attributes = tc.attributes?.reduce((acc: Record<string, string>, attr: TestCaseAttribute) => {
@@ -166,10 +172,12 @@ exportToExcel(): void {
         }, {}) || {};
 
         return {
+          'S.No': index + 1, // Serial number
           'Test Case ID': tc.testCaseId,
           'Use Case': tc.useCase,
           'Scenario': tc.scenario,
           'Steps': stepText,
+          'Expected Results': expectedResults, // New column for expected results
           'Result': tc.result || '',
           'Actual': tc.actual || '',
           'Remarks': tc.remarks || '',
@@ -179,6 +187,21 @@ exportToExcel(): void {
 
       if (formattedData.length > 0) {
         const ws = XLSX.utils.json_to_sheet(formattedData);
+        
+        // Set column widths for better readability
+        const colWidths = [
+          { wch: 5 },    // S.No
+          { wch: 15 },   // Test Case ID
+          { wch: 30 },   // Use Case
+          { wch: 30 },   // Scenario
+          { wch: 50 },   // Steps
+          { wch: 50 },   // Expected Results
+          { wch: 10 },   // Result
+          { wch: 30 },   // Actual
+          { wch: 30 }    // Remarks
+        ];
+        ws['!cols'] = colWidths;
+        
         // Ensure sheet name is valid (Excel has restrictions)
         const sheetName = version.substring(0, 31).replace(/[\\/*\[\]:?]/g, '');
         XLSX.utils.book_append_sheet(wb, ws, sheetName);
