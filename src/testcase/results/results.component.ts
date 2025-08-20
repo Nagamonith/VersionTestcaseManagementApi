@@ -25,6 +25,7 @@ export class ResultsComponent implements OnInit {
   private _selectedModule = signal<string>('');
   private _filterStatus = signal<'All' | 'Pass' | 'Fail' | 'Pending'>('All');
   private _selectedTestRunId = signal<string>('');
+  suiteTestCasesMap = signal<Map<string, any[]>>(new Map());
 
   // Public properties to bind in template (two-way friendly)
   get selectedModule(): string { return this._selectedModule(); }
@@ -215,26 +216,43 @@ export class ResultsComponent implements OnInit {
     }
   }
 
-  private async loadSuiteTestCases(suiteId: string) {
-    try {
-      const response = await firstValueFrom(
-        this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
-          catchError(() => of({ testCases: [] }))
-        )
-      );
 
-      const testCaseDetails = (response.testCases || []).map(tcItem => ({
+// Update the loadSuiteTestCases method
+private async loadSuiteTestCases(suiteId: string): Promise<void> {
+  try {
+    const response = await firstValueFrom(
+      this.testSuiteService.getTestSuiteWithCases(suiteId).pipe(
+        catchError(() => of({ testCases: [] }))
+      )
+    );
+
+    const testCaseDetails = (response.testCases || []).map((tcItem: any) => {
+      const executionDetails = tcItem.executionDetails || {};
+      return {
         ...tcItem.testCase,
-        executionDetails: tcItem.executionDetails
-      }));
-      
-      this.suiteTestCases.set(testCaseDetails);
-    } catch (error) {
-      console.error('Error loading suite test cases:', error);
-      this.suiteTestCases.set([]);
-    }
-  }
+        actual: executionDetails.actual || tcItem.testCase.actual || '-',
+        result: executionDetails.result || tcItem.testCase.result || 'Pending',
+        remarks: executionDetails.remarks || tcItem.testCase.remarks || '-',
+        executionDetails: executionDetails
+      };
+    });
 
+    // Update the map with this suite's test cases
+    const currentMap = new Map(this.suiteTestCasesMap());
+    currentMap.set(suiteId, testCaseDetails);
+    this.suiteTestCasesMap.set(currentMap);
+    
+  } catch (error) {
+    console.error('Error loading suite test cases:', error);
+    const currentMap = new Map(this.suiteTestCasesMap());
+    currentMap.set(suiteId, []);
+    this.suiteTestCasesMap.set(currentMap);
+  }
+}
+
+getTestCasesForSuite(suiteId: string): any[] {
+  return this.suiteTestCasesMap().get(suiteId) || [];
+}
 
   async getModuleName(moduleId: string): Promise<string> {
     const modules = this.modules();
@@ -248,16 +266,19 @@ export class ResultsComponent implements OnInit {
     return suite ? suite.suiteName : '';
   }
 
-  toggleSuiteExpansion(suiteId: string): void {
-    const expanded = new Set(this.expandedSuites());
-    if (expanded.has(suiteId)) {
-      expanded.delete(suiteId);
-    } else {
-      expanded.add(suiteId);
-    }
-    this.expandedSuites.set(expanded);
+ async toggleSuiteExpansion(suiteId: string): Promise<void> {
+  const expanded = new Set(this.expandedSuites());
+  
+  if (expanded.has(suiteId)) {
+    expanded.delete(suiteId);
+  } else {
+    expanded.add(suiteId);
+    // Load test cases for this specific suite
+    await this.loadSuiteTestCases(suiteId);
   }
-
+  
+  this.expandedSuites.set(expanded);
+}
   isSuiteExpanded(suiteId: string): boolean {
     return this.expandedSuites().has(suiteId);
   }
