@@ -34,6 +34,7 @@ import { TestSuite, TestSuiteResponse, TestSuiteWithCasesResponse } from 'src/ap
 import { TestRun, TestRunResponse, TestRunStatus } from 'src/app/shared/modles/test-run.model';
 import { IdResponse } from 'src/app/shared/modles/product.model';
 import { catchError, forkJoin, map, of, switchMap, tap, finalize } from 'rxjs';
+import { AutoSaveService } from 'src/app/shared/services/auto-save.service';
 
 interface Filter {
   slNo: string;
@@ -84,6 +85,7 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
   private productService = inject(ProductService);
   private cdRef = inject(ChangeDetectorRef);
   private sanitizer = inject(DomSanitizer);
+  private autoSaveService = inject(AutoSaveService);
 
   // State signals
   selectedModule = signal<string | null>(null);
@@ -219,7 +221,75 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     window.addEventListener('resize', this.updateScrollButtons.bind(this));
+    // --- Auto Save Setup ---
+    this.autoSaveService.setInterval(3000); // Default 3s, can be changed by user
+    this.autoSaveService.start(() => this.autoSaveExecution(), false, true);
   }
+  private autoSaveExecution(): void {
+  // Only auto-save if in test execution mode and form is initialized
+  if (!this.showStartTesting || !this.isFormInitialized()) return;
+
+  const formValues = this.formArray.value;
+  const testCases = this.versionTestCases();
+
+  const updatedTestCases = testCases.map((tc, index) => ({
+    ...tc,
+    result: formValues[index]?.result || 'Pending',
+    actual: (formValues[index]?.actual || '').trim(),
+    remarks: (formValues[index]?.remarks || '').trim(),
+    uploads: this.uploads[index]?.map(u => u.url) || [],
+    testRunId: this.showTestRuns ? this.selectedTestRunId() : undefined
+  }));
+
+  const updateRequests = updatedTestCases.map(tc => {
+    // When in suite/run context, update execution details against the suite
+    if (this.showTestSuites || this.showTestRuns) {
+      let suiteId: string | null = null;
+      const caseSuiteIds = (tc as any).testSuiteIds as string[] | undefined;
+      if (caseSuiteIds && caseSuiteIds.length > 0) {
+        suiteId = caseSuiteIds[0];
+      } else if (this.showTestSuites && this.selectedModule()) {
+        suiteId = this.selectedModule()!;
+      } else if (this.showTestRuns) {
+        const selectedRun = this.selectedTestRun();
+        if (this.selectedSuiteIds.length === 1) {
+          suiteId = this.selectedSuiteIds[0];
+        } else if (selectedRun?.testSuites?.length === 1) {
+          suiteId = selectedRun.testSuites[0].id;
+        }
+      }
+      if (!suiteId) return of(null);
+
+      return this.testSuiteService.updateExecutionDetails(suiteId, tc.id, {
+        result: tc.result,
+        actual: tc.actual,
+        remarks: tc.remarks
+      }).pipe(
+        catchError(() => of(null))
+      );
+    }
+
+    // Module-only context updates the test case itself
+    const updateData: UpdateTestCaseRequest = {
+      useCase: tc.useCase,
+      scenario: tc.scenario,
+      testType: tc.testType,
+      testTool: tc.testTool,
+      result: tc.result,
+      actual: tc.actual,
+      remarks: tc.remarks,
+      attributes: tc.attributes
+    };
+
+    return this.testCaseService.updateTestCase(tc.moduleId, tc.id, updateData)
+      .pipe(
+        catchError(() => of(null))
+      );
+  });
+
+  // Fire all updates in parallel, but don't show UI alerts for auto-save
+  forkJoin(updateRequests).subscribe();
+}
 
   private initializeData(): void {
     const productId = this.selectedProductId();
@@ -492,6 +562,7 @@ private loadSuiteData(suiteId: string): void {
     if (this.alertTimeout) {
       clearTimeout(this.alertTimeout);
     }
+    this.autoSaveService.stop();
   }
 
   // Toggle selection mode methods
