@@ -75,12 +75,15 @@
         
         <div class="form-group">
           <label for="module-version">Version</label>
-          <input 
+          <select
             id="module-version"
-            type="text" 
-            [(ngModel)]="moduleForm.version" 
-            placeholder="1.0"
-            maxlength="20" />
+            [(ngModel)]="moduleForm.version"
+            required
+          >
+            <option *ngFor="let v of productVersions" [value]="v.version">
+              {{ v.version }}
+            </option>
+          </select>
         </div>
         
         <div class="form-actions">

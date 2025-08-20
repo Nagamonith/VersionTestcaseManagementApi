@@ -31,12 +31,14 @@ export class ImportExcelComponent {
     return '';
   }
   cancelFile(fileInput: HTMLInputElement) {
+    // Only clear file input and state if user clicks Remove, not on navigation
     fileInput.value = '';
     this.fileName.set('');
     this.sheetNames.set([]);
     this.sheetData.set(null);
     this.errorMessage.set('');
     this.isLoading.set(false);
+    // Do NOT clear sessionStorage here, so navigation state is preserved
   }
   fileName = signal<string>('');
   sheetNames = signal<string[]>([]);
@@ -58,12 +60,21 @@ export class ImportExcelComponent {
     const navigation = this.router.getCurrentNavigation();
     const state = navigation?.extras.state as { productId: string, productName: string };
 
-    if (state) {
-      this.currentProduct.set({
-        id: state.productId,
-        name: state.productName
-      });
-      this.loadModules(state.productId);
+    let productId = '';
+    let productName = '';
+    if (state && state.productId) {
+      productId = state.productId;
+      productName = state.productName || '';
+      sessionStorage.setItem('importExcelProductId', productId);
+      sessionStorage.setItem('importExcelProductName', productName);
+    } else {
+      productId = sessionStorage.getItem('importExcelProductId') || '';
+      productName = sessionStorage.getItem('importExcelProductName') || '';
+    }
+
+    if (productId) {
+      this.currentProduct.set({ id: productId, name: productName });
+      this.loadModules(productId);
     }
   }
 
@@ -114,8 +125,18 @@ export class ImportExcelComponent {
   }
 
   onSelectSheet(sheetName: string) {
-    const product = this.currentProduct();
+    let product = this.currentProduct();
     const data = this.sheetData();
+
+    // Always try to restore product if missing
+    if (!product) {
+      const productId = sessionStorage.getItem('importExcelProductId') || '';
+      const productName = sessionStorage.getItem('importExcelProductName') || '';
+      if (productId) {
+        product = { id: productId, name: productName };
+        this.currentProduct.set(product);
+      }
+    }
 
     if (!product) {
       this.errorMessage.set('No product selected. Please select a product first.');
@@ -137,6 +158,11 @@ export class ImportExcelComponent {
       version: this.version()
     };
 
+    // Always persist product info for mapping page
+    sessionStorage.setItem('sheetMatchingProductId', product.id);
+    sessionStorage.setItem('sheetMatchingProductName', product.name);
+
+    // Do NOT clear file input or state here; just navigate
     this.router.navigate(['/tester/mapping', encodeURIComponent(sheetName)], {
       state: navigationData
     }).catch(error => {
