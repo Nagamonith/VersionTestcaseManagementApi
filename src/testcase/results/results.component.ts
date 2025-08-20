@@ -39,7 +39,7 @@ export class ResultsComponent implements OnInit {
   set selectedTestRunId(value: string) { this._selectedTestRunId.set(value || ''); }
 
   selectedProductId = signal<string>('');
-  showTestRunResults = signal(false);
+  showTestRunResults = signal(true);
   selectedSuiteId = signal<string>('');
   expandedSuites = signal<Set<string>>(new Set());
 
