@@ -8,7 +8,7 @@
   (onCancel)="handleCancelDelete()">
 </app-alert>
 
-<div class="test-suite-container">
+<!-- <div class="test-suite-container"> -->
   <!-- Loading Indicator -->
   <div *ngIf="isLoading()" class="loading-overlay">
     <div class="loading-spinner">
@@ -21,7 +21,7 @@
   <div *ngIf="mode() === 'list'" class="list-view">
     <div class="page-header">
       <h2 class="text-center">Test Suites Management</h2>
-      <p *ngIf="currentProductId()" class="product-info">Product ID: {{ currentProductId() }}</p>
+      <!-- <p *ngIf="currentProductId()" class="product-info">Product ID: {{ currentProductId() }}</p> -->
     </div>
 
     <div class="action-buttons">
@@ -308,4 +308,4 @@
   <p><strong>Selected Test Case IDs:</strong> {{ getSelectedTestCaseIds() }}</p>
 </div>
   </div>
-</div>
+<!-- </div> -->

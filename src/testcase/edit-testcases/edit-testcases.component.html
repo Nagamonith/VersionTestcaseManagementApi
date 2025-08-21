@@ -7,13 +7,14 @@
   (onCancel)="handleCancelDelete()">
 </app-alert>
 
-<div class="container">
+<!-- <div class="container"> -->
   <h2 class="text-center">Test Case Management</h2>
 
   <!-- Module and Version display -->
   <div class="module-info">
-    <div style="text-align: center;"><strong>Module:</strong> {{ getModuleName(selectedModule()) }}</div>
-    <button class="btn-small-back" (click)="goBack()"> Change Module</button>
+    <div style="text-align:center"><strong>Module:</strong> {{ getModuleName(selectedModule()) }}</div>
+    <button class="btn-small-back" (click)="openForm()">Add New Test Case</button>
+    <button style="text-align:right;" class="btn-small-back" (click)="goBack()"> Change Module</button>
     <button class="btn-small-back" (click)="openModuleAttributes()"> Module Attributes</button>
     <button class="btn-small-back" (click)="refreshVersionOptions()" title="Refresh version options"> Refresh Versions</button>
     <!-- <div class="debug-info" style="font-size: 12px; color: #666; margin-top: 5px;">
@@ -127,7 +128,7 @@
     </div>
   </div>
 
-  <button class="btn-save" (click)="openForm()">Add New Test Case</button>
+  <!-- <button class="btn-save" (click)="openForm()">Add New Test Case</button> -->
 
   <!-- Add/Edit Test Case Form -->
   <div *ngIf="isEditing()" class="form-overlay">
@@ -370,4 +371,4 @@
     </div>
   </div>
 </div>
-</div>
+<!-- </div> -->
