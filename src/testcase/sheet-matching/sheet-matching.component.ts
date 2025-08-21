@@ -16,7 +16,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TestCaseService } from 'src/app/shared/services/test-case.service';
 import { ProductService } from 'src/app/shared/services/product.service';
 import { ModuleService } from 'src/app/shared/services/module.service';
-import { CreateModuleRequest, ModuleAttributeRequest, ModuleAttribute } from 'src/app/shared/modles/module.model';
+import { CreateModuleRequest, ModuleAttributeRequest, ModuleAttribute, ProductModule } from 'src/app/shared/modles/module.model';
 import { CreateTestCaseRequest, ManualTestCaseStep, TestCaseAttributeRequest } from 'src/app/shared/modles/test-case.model';
 import { Product, type ProductVersion, ProductVersionResponse } from 'src/app/shared/modles/product.model';
 import { catchError, firstValueFrom, of } from 'rxjs';
@@ -53,6 +53,11 @@ interface ImportResult {
   styleUrls: ['./sheet-matching.component.css']
 })
 export class SheetMatchingComponent {
+  // Helper for select (change) event to get value safely
+  getSelectValue(event: Event): string {
+    const target = event.target as HTMLSelectElement | null;
+    return target ? target.value : '';
+  }
   private router = inject(Router);
   private route = inject(ActivatedRoute);
   private dialog = inject(MatDialog);
@@ -71,12 +76,17 @@ export class SheetMatchingComponent {
   errorMessage = signal<string | null>(null);
   currentProduct = signal<Product | null>(null);
 
-  // Module creation signals
+  // Module selection/creation signals
+  moduleSelection = signal<'create' | 'select'>('select');
   showModuleForm = signal(false);
   moduleCreated = signal(false);
   createdModuleId = signal<string | null>(null);
   createdModuleName = signal<string>('');
-  
+
+  // Existing modules dropdown
+  existingModules = signal<ProductModule[]>([]);
+  selectedExistingModule = signal<ProductModule | null>(null);
+
   // Module form data
   moduleForm = {
     name: '',
@@ -88,7 +98,7 @@ export class SheetMatchingComponent {
   showModuleAttributesForm = signal(false);
   moduleAttributes = signal<ModuleAttribute[]>([]);
   currentModuleAttribute = signal<ModuleAttribute | null>(null);
-  
+
   // New module attribute form
   newModuleAttribute = {
     name: '',
@@ -129,13 +139,40 @@ export class SheetMatchingComponent {
       this.moduleForm.description = `Module created from imported sheet: ${this.sheetName()}`;
 
       if (state['productId']) {
-        this.loadProductDetails(state['productId']);
-        this.loadProductVersions(state['productId']);
+        const productId = state['productId'];
+        this.loadProductDetails(productId);
+        this.loadProductVersions(productId);
+        this.loadExistingModules(productId);
       }
-
       setTimeout(() => this.autoMapColumns(), 0);
     } else {
       this.router.navigate(['/tester/import-excel']);
+    }
+  }
+
+  // Load all modules for the product
+  private loadExistingModules(productId: string): void {
+    this.moduleService.getModulesByProduct(productId).subscribe({
+      next: (modules) => {
+        this.existingModules.set(modules);
+      },
+      error: (err) => {
+        this.existingModules.set([]);
+        this.snackBar.open('Failed to load existing modules', 'Close', { duration: 3000 });
+      }
+    });
+  }
+
+  // Handler for dropdown selection
+  onExistingModuleSelect(moduleId: string): void {
+    const module = this.existingModules().find(m => m.id === moduleId);
+    if (module) {
+      this.selectedExistingModule.set(module);
+      this.createdModuleId.set(module.id);
+      this.createdModuleName.set(module.name);
+      this.moduleCreated.set(true);
+      this.loadModuleAttributes();
+      this.snackBar.open(`Selected module: ${module.name}`, 'Close', { duration: 2000 });
     }
   }
 

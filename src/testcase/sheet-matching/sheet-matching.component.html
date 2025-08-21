@@ -27,7 +27,7 @@
     {{ errorMessage() }}
   </div>
 
-  <!-- Step 1: Module Creation -->
+  <!-- Step 1: Module Selection/Creation -->
   <div class="workflow-step" [class.completed]="moduleCreated()">
     <div class="step-header">
       <div class="step-number" [class.completed]="moduleCreated()">
@@ -35,23 +35,38 @@
         <span *ngIf="!moduleCreated()">1</span>
       </div>
       <h3 class="step-title">
-        {{ moduleCreated() ? 'Module Created' : 'Create Module' }}
+        {{ moduleCreated() ? 'Module Ready' : 'Select or Create Module' }}
         <span *ngIf="moduleCreated()" class="module-name">({{ createdModuleName() }})</span>
       </h3>
-      <button 
-        *ngIf="!moduleCreated()"
-        (click)="openModuleForm()" 
-        class="step-action-btn">
-        <mat-icon>add</mat-icon>
-        Create Module
-      </button>
+      <div class="module-actions">
+        <button 
+          *ngIf="!moduleCreated()"
+          (click)="openModuleForm()" 
+          class="step-action-btn">
+          <mat-icon>add</mat-icon>
+          Create Module
+        </button>
+        <!-- DROPDOWN FOR EXISTING MODULES -->
+        <select
+          *ngIf="!moduleCreated() && existingModules().length > 0"
+          class="step-action-btn"
+          (change)="onExistingModuleSelect(getSelectValue($event))"
+          [value]="selectedExistingModule()?.id || ''"
+          style="margin-left: 12px;"
+        >
+          <option value="" disabled selected>Select Existing Module</option>
+          <option *ngFor="let m of existingModules()" [value]="m.id">
+            {{ m.name }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- Module Creation Form -->
     <div *ngIf="showModuleForm()" class="step-content">
       <div class="module-form">
         <h4>Create New Module</h4>
-        
+        <!-- ...existing code for module form... -->
         <div class="form-group">
           <label for="module-name">Module Name <span class="required">*</span></label>
           <input 
@@ -62,7 +77,6 @@
             required 
             maxlength="100" />
         </div>
-        
         <div class="form-group">
           <label for="module-description">Description</label>
           <textarea 
@@ -72,7 +86,6 @@
             rows="3"
             maxlength="500"></textarea>
         </div>
-        
         <div class="form-group">
           <label for="module-version">Version</label>
           <select
@@ -85,7 +98,6 @@
             </option>
           </select>
         </div>
-        
         <div class="form-actions">
           <button 
             (click)="createModule()" 
@@ -99,6 +111,7 @@
         </div>
       </div>
     </div>
+  </div>
   </div>
 
   <!-- Step 2: Module Attributes (Optional) -->
@@ -410,4 +423,3 @@
       </button>
     </div>
   </div>
-</div>
