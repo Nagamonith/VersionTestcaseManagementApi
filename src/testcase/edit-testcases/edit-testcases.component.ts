@@ -681,13 +681,14 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
 
     const updatePayload: UpdateTestCaseRequest = {
       productVersionId: formValue.productVersionId, // Send the GUID to backend
-      useCase: formValue.useCase,
-      scenario: formValue.scenario,
-      testType: formValue.testType,
-      testTool: formValue.testTool,
-      result: formValue.result,
-      actual: formValue.actual,
-      remarks: formValue.remarks
+  testCaseId: formValue.testCaseId, // Ensure testCaseId is sent
+  useCase: formValue.useCase,
+  scenario: formValue.scenario,
+  testType: formValue.testType,
+  testTool: formValue.testTool,
+  result: formValue.result,
+  actual: formValue.actual,
+  remarks: formValue.remarks
     };
 
     console.log('Sending update payload:', updatePayload);

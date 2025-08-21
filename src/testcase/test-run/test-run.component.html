@@ -30,10 +30,10 @@
           <tr>
             <th>Name</th>
             <th>Description</th>
-            <th>Status</th>
+            <!-- <th>Status</th> -->
             <th>Test Suites</th>
             <th>Last Updated</th>
-            <th>Created By</th>
+            <!-- <th>Created By</th> -->
             <th>Actions</th>
           </tr>
         </thead>
@@ -41,10 +41,10 @@
           <tr *ngFor="let run of testRuns()">
             <td>{{ run.name }}</td>
             <td>{{ run.description || '-' }}</td>
-            <td>{{ run.status }}</td>
+            <!-- <td>{{ run.status }}</td> -->
            <td>{{ run.testSuites?.length || 0 }}</td>
             <td>{{ formatDate(run.updatedAt) }}</td>
-            <td>{{ run.createdBy || '-' }}</td>
+            <!-- <td>{{ run.createdBy || '-' }}</td> -->
             <td class="actions">
               <button class="btn-edit" 
                       (click)="startEditRun(run.id)"

@@ -87,6 +87,7 @@ export interface CreateTestCaseRequest {
 
 export interface UpdateTestCaseRequest {
   productVersionId?: string; // Optional GUID for updates
+  testCaseId?: string; // Allow updating testCaseId
   useCase?: string;
   scenario?: string;
   testType?: string;

@@ -48,7 +48,7 @@
               <th>Name</th>
               <th>Description</th>
               <th>Test Cases</th>
-              <th>Status</th>
+              <!-- <th>Status</th> -->
               <th>Last Updated</th>
               <th>Actions</th>
             </tr>
@@ -64,11 +64,11 @@
               <td class="test-case-count">
                 <span class="badge">{{ getTestCaseCount(suite) }}</span>
               </td>
-              <td class="suite-status">
+              <!-- <td class="suite-status">
                 <span class="status-badge" [class.active]="suite.isActive" [class.inactive]="!suite.isActive">
                   {{ suite.isActive ? 'Active' : 'Inactive' }}
                 </span>
-              </td>
+              </td> -->
               <td class="suite-date">
                 {{ formatDate(suite.createdAt || suite.updatedAt) }}
               </td>
