@@ -186,30 +186,30 @@
       </div>
 
       <div class="form-group">
-        <label>Steps:</label>
-        <div formArrayName="steps">
-          <div *ngFor="let step of steps.controls; let i = index" [formGroupName]="i" class="step-item">
-            <div class="step-header">
-              <span>Step {{i + 1}}</span>
-              <button type="button" class="btn-small-danger" (click)="removeStep(i)" *ngIf="steps.length > 1">
-                Remove
-              </button>
-            </div>
-            <textarea formControlName="steps" rows="2" placeholder="Step description" required></textarea>
-            <div *ngIf="steps.at(i).get('steps')?.invalid && (steps.at(i).get('steps')?.dirty || steps.at(i).get('steps')?.touched)" 
-                class="error-message">
-              Step description is required
-            </div>
-            <textarea formControlName="expectedResult" rows="2" placeholder="Expected result" required></textarea>
-            <div *ngIf="steps.at(i).get('expectedResult')?.invalid && (steps.at(i).get('expectedResult')?.dirty || steps.at(i).get('expectedResult')?.touched)" 
-                class="error-message">
-              Expected result is required
-            </div>
-          </div>
-        </div>
-        <button type="button" class="btn-small" (click)="addStep()">Add Step</button>
+  <label>Steps:</label>
+  <div formArrayName="steps">
+    <!-- This should render steps in the correct order (0, 1, 2, ...) -->
+    <div *ngFor="let step of steps.controls; let i = index" [formGroupName]="i" class="step-item">
+      <div class="step-header">
+        <span>Step {{i + 1}}</span>
+        <button type="button" class="btn-small-danger" (click)="removeStep(i)" *ngIf="steps.length > 1">
+          Remove
+        </button>
       </div>
-
+      <textarea formControlName="steps" rows="2" placeholder="Step description" required></textarea>
+      <div *ngIf="steps.at(i).get('steps')?.invalid && (steps.at(i).get('steps')?.dirty || steps.at(i).get('steps')?.touched)" 
+          class="error-message">
+        Step description is required
+      </div>
+      <textarea formControlName="expectedResult" rows="2" placeholder="Expected result" required></textarea>
+      <div *ngIf="steps.at(i).get('expectedResult')?.invalid && (steps.at(i).get('expectedResult')?.dirty || steps.at(i).get('expectedResult')?.touched)" 
+          class="error-message">
+        Expected result is required
+      </div>
+    </div>
+  </div>
+  <button type="button" class="btn-small" (click)="addStep()">Add Step</button>
+</div>
       <!-- Dynamic Attributes -->
       <div class="attributes-section" *ngIf="moduleAttributes().length > 0">
         <h4>Attributes</h4>

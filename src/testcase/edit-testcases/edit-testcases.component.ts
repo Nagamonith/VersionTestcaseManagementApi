@@ -164,16 +164,17 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
 
   // Step management
   createStep(step?: ManualTestCaseStep): FormGroup {
-    return this.fb.group({
-      id: [step?.id || null],
-      steps: [step?.steps || '', Validators.required],
-      expectedResult: [step?.expectedResult || '', Validators.required]
-    });
-  }
+  return this.fb.group({
+    id: [step?.id || null],
+    steps: [step?.steps || '', Validators.required],
+    expectedResult: [step?.expectedResult || '', Validators.required]
+  });
+}
 
   addStep(step?: ManualTestCaseStep): void {
-    this.steps.push(this.createStep(step));
-  }
+  // Always add the new step at the end of the array
+  this.steps.push(this.createStep(step));
+}
 
   removeStep(index: number): void {
     if (this.steps.length > 1) {
@@ -327,109 +328,111 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
   }
 
   // FIXED: Start editing with proper version handling
-  startEditing(testCase: TestCaseDetailResponse): void {
-    this.resetForm();
-    
-    // If version options are not loaded yet, try to load them first
-    if (this.versionOptions().length === 0) {
-      this.loadVersionOptions().subscribe({
-        next: () => {
-          // Retry editing after loading version options
-          this.startEditing(testCase);
-        },
-        error: () => {
-          this.showAlertMessage('Failed to load version options. Please try again.', 'error');
-        }
-      });
-      return;
-    }
-
-    // Find matching version by productVersionId first, then by version string
-    let matchingVersionId = testCase.productVersionId;
-    
-    // Debug logging
-    console.log('Editing test case:', testCase);
-    console.log('Available version options:', this.versionOptions());
-    console.log('Test case productVersionId:', testCase.productVersionId);
-    console.log('Test case version:', testCase.version);
-    
-    if (!matchingVersionId && testCase.version) {
-      // Fallback: find by version string
-      const versionOption = this.versionOptions().find(v => v.version === testCase.version);
-      matchingVersionId = versionOption?.id;
-      console.log('Found version by string:', versionOption);
-    }
-    
-    // If still no match, use the active version or first available as fallback
-    if (!matchingVersionId) {
-      const defaultVersion = this.versionOptions().find(v => v.isActive) || this.versionOptions()[0];
-      matchingVersionId = defaultVersion?.id;
-      
-      if (testCase.version || testCase.productVersionId) {
-        this.showAlertMessage(
-          `Original version not found. Using default version instead.`,
-          'warning'
-        );
+startEditing(testCase: TestCaseDetailResponse): void {
+  this.resetForm();
+  
+  // If version options are not loaded yet, try to load them first
+  if (this.versionOptions().length === 0) {
+    this.loadVersionOptions().subscribe({
+      next: () => {
+        // Retry editing after loading version options
+        this.startEditing(testCase);
+      },
+      error: () => {
+        this.showAlertMessage('Failed to load version options. Please try again.', 'error');
       }
-      console.log('Using default version:', defaultVersion);
-    }
-    
-    console.log('Final matching version ID:', matchingVersionId);
-
-    // Set form values with proper null checks
-    this.form.patchValue({
-      id: testCase.id || '',
-      moduleId: testCase.moduleId || this.selectedModule(),
-      productVersionId: matchingVersionId || '', // Use the GUID directly
-      testCaseId: testCase.testCaseId || '',
-      useCase: testCase.useCase || '',
-      scenario: testCase.scenario || '',
-      testType: testCase.testType || 'Manual',
-      testTool: testCase.testTool || '',
-      result: testCase.result || 'Pending',
-      actual: testCase.actual || '',
-      remarks: testCase.remarks || ''
     });
-
-    // Clear existing steps before adding new ones
-    while (this.steps.length > 0) {
-      this.steps.removeAt(0);
-    }
-
-    // Add steps with validation
-    if (testCase.steps && testCase.steps.length > 0) {
-      testCase.steps.forEach(step => {
-        this.addStep({
-          id: step.id,
-          steps: step.steps || '',
-          expectedResult: step.expectedResult || ''
-        });
-      });
-    } else {
-      // Add one empty step if none exist
-      this.addStep();
-    }
-
-    // Clear existing attributes before adding new ones
-    while (this.attributes.length > 0) {
-      this.attributes.removeAt(0);
-    }
-
-    // Handle attributes with proper validation
-    this.moduleAttributes().forEach(attr => {
-      const existingValue = testCase.attributes?.find(a => a.key === attr.key)?.value || '';
-      this.attributes.push(this.fb.group({
-        key: [attr.key || '', Validators.required],
-        value: [existingValue, attr.isRequired ? Validators.required : null]
-      }));
-    });
-
-    // Mark as editing
-    this.isEditing.set(true);
-    
-    // Trigger change detection if needed
-    this.cdr.detectChanges();
+    return;
   }
+
+  // Find matching version by productVersionId first, then by version string
+  let matchingVersionId = testCase.productVersionId;
+  
+  // Debug logging
+  console.log('Editing test case:', testCase);
+  console.log('Available version options:', this.versionOptions());
+  console.log('Test case productVersionId:', testCase.productVersionId);
+  console.log('Test case version:', testCase.version);
+  
+  if (!matchingVersionId && testCase.version) {
+    // Fallback: find by version string
+    const versionOption = this.versionOptions().find(v => v.version === testCase.version);
+    matchingVersionId = versionOption?.id;
+    console.log('Found version by string:', versionOption);
+  }
+  
+  // If still no match, use the active version or first available as fallback
+  if (!matchingVersionId) {
+    const defaultVersion = this.versionOptions().find(v => v.isActive) || this.versionOptions()[0];
+    matchingVersionId = defaultVersion?.id;
+    
+    if (testCase.version || testCase.productVersionId) {
+      this.showAlertMessage(
+        `Original version not found. Using default version instead.`,
+        'warning'
+      );
+    }
+    console.log('Using default version:', defaultVersion);
+  }
+  
+  console.log('Final matching version ID:', matchingVersionId);
+
+  // Set form values with proper null checks
+  this.form.patchValue({
+    id: testCase.id || '',
+    moduleId: testCase.moduleId || this.selectedModule(),
+    productVersionId: matchingVersionId || '', // Use the GUID directly
+    testCaseId: testCase.testCaseId || '',
+    useCase: testCase.useCase || '',
+    scenario: testCase.scenario || '',
+    testType: testCase.testType || 'Manual',
+    testTool: testCase.testTool || '',
+    result: testCase.result || 'Pending',
+    actual: testCase.actual || '',
+    remarks: testCase.remarks || ''
+  });
+
+  // Clear existing steps before adding new ones
+  while (this.steps.length > 0) {
+    this.steps.removeAt(0);
+  }
+
+  // FIXED: Add steps with validation - SORTED BY ID to ensure correct order
+  if (testCase.steps && testCase.steps.length > 0) {
+    // Sort steps by their ID to ensure correct order
+    const sortedSteps = [...testCase.steps].sort((a, b) => (a.id || 0) - (b.id || 0));
+    sortedSteps.forEach(step => {
+      this.addStep({
+        id: step.id,
+        steps: step.steps || '',
+        expectedResult: step.expectedResult || ''
+      });
+    });
+  } else {
+    // Add one empty step if none exist
+    this.addStep();
+  }
+
+  // Clear existing attributes before adding new ones
+  while (this.attributes.length > 0) {
+    this.attributes.removeAt(0);
+  }
+
+  // Handle attributes with proper validation
+  this.moduleAttributes().forEach(attr => {
+    const existingValue = testCase.attributes?.find(a => a.key === attr.key)?.value || '';
+    this.attributes.push(this.fb.group({
+      key: [attr.key || '', Validators.required],
+      value: [existingValue, attr.isRequired ? Validators.required : null]
+    }));
+  });
+
+  // Mark as editing
+  this.isEditing.set(true);
+  
+  // Trigger change detection if needed
+  this.cdr.detectChanges();
+}
 
   cancelEditing(): void {
     this.resetForm();
