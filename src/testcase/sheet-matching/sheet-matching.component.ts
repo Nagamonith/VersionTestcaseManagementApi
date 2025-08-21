@@ -183,6 +183,11 @@ export class SheetMatchingComponent {
       this.createdModuleName.set(module.name);
       this.moduleCreated.set(true);
       this.loadModuleAttributes();
+      // --- FIX: Ensure product context is set when selecting existing module ---
+      if (!this.currentProduct() || this.currentProduct()?.id !== module.productId) {
+        this.loadProductDetails(module.productId);
+        this.loadProductVersions(module.productId);
+      }
       this.snackBar.open(`Selected module: ${module.name}`, 'Close', { duration: 2000 });
     }
   }
@@ -432,10 +437,29 @@ export class SheetMatchingComponent {
     this.errorMessage.set(null);
 
     try {
+      console.debug('[IMPORT] Starting importTestCases');
+      console.debug('[IMPORT] moduleCreated:', this.moduleCreated());
+      console.debug('[IMPORT] createdModuleId:', this.createdModuleId());
+      console.debug('[IMPORT] createdModuleName:', this.createdModuleName());
+      console.debug('[IMPORT] currentProduct:', this.currentProduct());
+      console.debug('[IMPORT] coreMappings:', this.coreMappings());
+      console.debug('[IMPORT] attributeMappings:', this.attributeMappings());
+      console.debug('[IMPORT] sheetColumns:', this.sheetColumns());
+      console.debug('[IMPORT] sheetData:', this.sheetData());
+
+      // Defensive: If product context is missing, try to recover from selected module
+      if (!this.currentProduct() && this.selectedExistingModule()) {
+        this.loadProductDetails(this.selectedExistingModule()!.productId);
+        this.loadProductVersions(this.selectedExistingModule()!.productId);
+        // Wait a tick for signals to update
+        await new Promise(res => setTimeout(res, 200));
+      }
+
       const missingRequired = this.coreMappings()
         .filter(m => m.required && !m.mappedTo);
 
       if (missingRequired.length > 0) {
+        console.error('[IMPORT] Missing required mappings:', missingRequired);
         throw new Error(`Please map all required fields: ${missingRequired.map(m => m.label).join(', ')}`);
       }
 
@@ -448,7 +472,7 @@ export class SheetMatchingComponent {
       );
 
       if (importResult.errorMessages.length > 0) {
-        console.error('Import errors:', importResult.errorMessages);
+        console.error('[IMPORT] Import errors:', importResult.errorMessages);
       }
 
       // Navigate to the new module
@@ -459,7 +483,7 @@ export class SheetMatchingComponent {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to import test cases';
       this.errorMessage.set(errorMsg);
-      console.error('Import error:', error);
+      console.error('[IMPORT] Import error:', error);
       this.snackBar.open(errorMsg, 'Close', { duration: 5000 });
     } finally {
       this.isProcessing.set(false);
@@ -476,13 +500,20 @@ export class SheetMatchingComponent {
     const moduleId = this.createdModuleId();
     if (!moduleId) {
       result.errorMessages.push('No module created');
+      console.error('[IMPORT] No module created');
       return result;
     }
 
     // Get product versions for mapping
-    const product = this.currentProduct();
+    let product = this.currentProduct();
+    if ((!product || !product.id) && this.selectedExistingModule()) {
+      // Defensive: try to recover product from selected module
+      product = { id: this.selectedExistingModule()!.productId, name: '', description: '', isActive: true } as any;
+      this.currentProduct.set(product);
+    }
     if (!product || !product.id) {
-      result.errorMessages.push('No product selected');
+      result.errorMessages.push('No product selected (product context missing)');
+      console.error('[IMPORT] No product selected (product context missing)');
       return result;
     }
 
@@ -490,6 +521,7 @@ export class SheetMatchingComponent {
       this.testCaseService.getProductVersions(product.id).pipe(
         catchError(() => {
           result.errorMessages.push('Failed to load product versions');
+          console.error('[IMPORT] Failed to load product versions');
           return of([] as ProductVersionResponse[]);
         })
       )
@@ -503,6 +535,7 @@ export class SheetMatchingComponent {
           const versionString = this.versionMapping.replace('__pv__', '');
           const productVersion = productVersions.find(v => v.version === versionString);
           if (!productVersion) {
+            console.error(`[IMPORT] Row ${index + 1}: Product version "${versionString}" not found`, productVersions);
             throw new Error(`Product version "${versionString}" not found`);
           }
           productVersionId = productVersion.id;
@@ -510,6 +543,7 @@ export class SheetMatchingComponent {
           const versionString = row[this.versionMapping] || 'Unversioned';
           const productVersion = productVersions.find(v => v.version === versionString);
           if (!productVersion) {
+            console.error(`[IMPORT] Row ${index + 1}: Version "${versionString}" not found`, productVersions);
             throw new Error(`Version "${versionString}" not found`);
           }
           productVersionId = productVersion.id;
@@ -517,10 +551,12 @@ export class SheetMatchingComponent {
           if (productVersions.length > 0) {
             productVersionId = productVersions[0].id;
           } else {
+            console.error(`[IMPORT] Row ${index + 1}: No product versions available`);
             throw new Error('No product versions available');
           }
         }
 
+        // Build test case payload
         const testCaseRequest: CreateTestCaseRequest = {
           moduleId: moduleId,
           productVersionId: productVersionId,
@@ -535,20 +571,59 @@ export class SheetMatchingComponent {
           remarks: this.getRowValue(row, 'remarks')
         };
 
-        const createdTestCase = await firstValueFrom(
-          this.testCaseService.createTestCase(moduleId, testCaseRequest)
-        );
+        // Add custom attributes if mapped
+        if (this.moduleAttributes().length > 0) {
+          // Add custom attributes as a loose property for debug/testing
+          (testCaseRequest as any).attributes = {};
+          for (const attr of this.moduleAttributes()) {
+            const col = this.attributeMappings()[attr.key];
+            if (col && row[col]) {
+              (testCaseRequest as any).attributes[attr.key] = row[col];
+            }
+          }
+        }
+
+        // Log the payload for this row
+        console.debug(`[IMPORT] Row ${index + 1}: Payload to API`, JSON.stringify(testCaseRequest, null, 2));
+
+        // Send to API
+        let createdTestCase: any = null;
+        try {
+          createdTestCase = await firstValueFrom(
+            this.testCaseService.createTestCase(moduleId, testCaseRequest)
+          );
+        } catch (err: any) {
+          let errorMsg = 'Unknown error';
+          if (err) {
+            if (typeof err === 'string') errorMsg = err;
+            else if (typeof err.message === 'string') errorMsg = err.message;
+            if (err.error) {
+              errorMsg += ' | Backend: ' + (typeof err.error === 'string' ? err.error : JSON.stringify(err.error));
+            }
+          }
+          result.errors++;
+          result.errorMessages.push(`Row ${index + 1}: ${errorMsg}`);
+          console.error(`[IMPORT] Error creating test case at row ${index + 1}:`, err);
+          continue;
+        }
         
         // Add custom attributes if mapped
         await this.addTestCaseAttributes(createdTestCase.id, row);
         
         result.success++;
 
-      } catch (error) {
+      } catch (error: any) {
         result.errors++;
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        let errorMsg = 'Unknown error';
+        if (error) {
+          if (typeof error === 'string') errorMsg = error;
+          else if (typeof error.message === 'string') errorMsg = error.message;
+          if (error.error) {
+            errorMsg += ' | Backend: ' + (typeof error.error === 'string' ? error.error : JSON.stringify(error.error));
+          }
+        }
         result.errorMessages.push(`Row ${index + 1}: ${errorMsg}`);
-        console.error(`Error creating test case at row ${index + 1}:`, error);
+        console.error(`[IMPORT] Error creating test case at row ${index + 1}:`, error);
       }
     }
 
