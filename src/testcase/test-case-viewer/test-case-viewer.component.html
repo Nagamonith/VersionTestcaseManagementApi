@@ -53,14 +53,18 @@
           <td><strong>Result</strong></td>
           <td>{{ formatResult(testCase()?.result) }}</td>
         </tr>
-        <tr>
+        <!-- <tr>
           <td><strong>Actual</strong></td>
-          <td class="wrap-text">{{ testCase()?.actual || '—' }}</td>
+          <td class="wrap-text">
+            {{ (testCase()?.actual || (testCase()?.executionDetails?.actual)) || '—' }}
+          </td>
         </tr>
         <tr>
           <td><strong>Remarks</strong></td>
-          <td class="wrap-text">{{ testCase()?.remarks || '—' }}</td>
-        </tr>
+          <td class="wrap-text">
+            {{ (testCase()?.remarks || (testCase()?.executionDetails?.remarks)) || '—' }}
+          </td>
+        </tr> -->
         <ng-container *ngIf="testCase()?.steps as steps">
           <tr *ngIf="steps && steps.length > 0">
             <td><strong>Steps</strong></td>

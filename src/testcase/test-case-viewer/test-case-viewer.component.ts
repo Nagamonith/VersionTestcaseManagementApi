@@ -49,9 +49,20 @@ export class TestCaseViewerComponent implements OnInit {
     this.isLoading.set(true);
     this.error.set(null);
 
-    this.testCaseService.getTestCaseById(moduleId, testCaseId).subscribe({
+    // Use getTestCaseDetail for consistent enrichment (steps, executionDetails, etc)
+    this.testCaseService.getTestCaseDetail(moduleId, testCaseId).subscribe({
       next: (testCase) => {
-        this.testCase.set(testCase);
+        // If executionDetails present, overlay actual/remarks/result
+        if (testCase.executionDetails) {
+          this.testCase.set({
+            ...testCase,
+            actual: testCase.executionDetails.actual || testCase.actual,
+            remarks: testCase.executionDetails.remarks || testCase.remarks,
+            result: testCase.executionDetails.result || testCase.result
+          });
+        } else {
+          this.testCase.set(testCase);
+        }
         this.isLoading.set(false);
       },
       error: (err) => {

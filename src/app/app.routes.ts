@@ -97,6 +97,14 @@ export const routes: Routes = [
               )
           },
           { path: '', redirectTo: 'add-testcases', pathMatch: 'full' },
+          // Public route for viewing a test case by moduleId and testCaseId
+          {
+            path: 'public-view/:moduleId/:testCaseId',
+            loadComponent: () =>
+              import('../testcase/test-case-viewer/test-case-viewer.component')
+                .then(m => m.TestCaseViewerComponent)
+          },
+          // Legacy route for backward compatibility (optional)
           {
             path: 'view-testcase/:testCaseId',
             loadComponent: () =>
