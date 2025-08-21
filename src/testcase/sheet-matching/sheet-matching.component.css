@@ -1,3 +1,39 @@
+.module-step {
+  margin-bottom: 0;
+}
+.module-form-wrapper {
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+.module-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f5f7fa;
+  border-radius: 6px;
+  padding: 10px 16px;
+  margin: 12px 0 0 0;
+  font-size: 1.08em;
+  color: #2d3a4a;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+}
+.summary-label {
+  font-weight: 500;
+  color: #3b4a5a;
+}
+.summary-value {
+  font-weight: 600;
+  color: #1a2a3a;
+}
+.step-divider {
+  height: 1px;
+  background: #e0e4ea;
+  margin: 0 0 18px 0;
+  border: none;
+}
+.workflow-step {
+  margin-bottom: 18px;
+}
 /* sheet-matching.component.css */
 
 .sheet-matching-container {

@@ -53,6 +53,17 @@ interface ImportResult {
   styleUrls: ['./sheet-matching.component.css']
 })
 export class SheetMatchingComponent {
+  // Allow user to reset/cancel selected module and re-select or create
+  resetModuleSelection(): void {
+    this.moduleCreated.set(false);
+    this.createdModuleId.set(null);
+    this.createdModuleName.set('');
+    this.selectedExistingModule.set(null);
+    this.moduleAttributes.set([]);
+    this.customAttributes.set([]);
+    this.attributeMappings.set({});
+    this.showModuleForm.set(false);
+  }
   // Helper for select (change) event to get value safely
   getSelectValue(event: Event): string {
     const target = event.target as HTMLSelectElement | null;

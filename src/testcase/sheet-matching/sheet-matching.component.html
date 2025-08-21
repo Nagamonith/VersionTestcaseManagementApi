@@ -28,7 +28,7 @@
   </div>
 
   <!-- Step 1: Module Selection/Creation -->
-  <div class="workflow-step" [class.completed]="moduleCreated()">
+  <div class="workflow-step module-step" [class.completed]="moduleCreated()">
     <div class="step-header">
       <div class="step-number" [class.completed]="moduleCreated()">
         <mat-icon *ngIf="moduleCreated()">check</mat-icon>
@@ -38,7 +38,7 @@
         {{ moduleCreated() ? 'Module Ready' : 'Select or Create Module' }}
         <span *ngIf="moduleCreated()" class="module-name">({{ createdModuleName() }})</span>
       </h3>
-      <div class="module-actions">
+      <div class="module-actions" style="display: flex; gap: 12px; align-items: center;">
         <button 
           *ngIf="!moduleCreated()"
           (click)="openModuleForm()" 
@@ -46,13 +46,11 @@
           <mat-icon>add</mat-icon>
           Create Module
         </button>
-        <!-- DROPDOWN FOR EXISTING MODULES -->
         <select
           *ngIf="!moduleCreated() && existingModules().length > 0"
           class="step-action-btn"
           (change)="onExistingModuleSelect(getSelectValue($event))"
           [value]="selectedExistingModule()?.id || ''"
-          style="margin-left: 12px;"
         >
           <option value="" disabled selected>Select Existing Module</option>
           <option *ngFor="let m of existingModules()" [value]="m.id">
@@ -63,7 +61,7 @@
     </div>
 
     <!-- Module Creation Form -->
-    <div *ngIf="showModuleForm()" class="step-content">
+    <div *ngIf="showModuleForm() && !moduleCreated()" class="step-content module-form-wrapper">
       <div class="module-form">
         <h4>Create New Module</h4>
         <!-- ...existing code for module form... -->
@@ -111,8 +109,21 @@
         </div>
       </div>
     </div>
+
+    <!-- Module summary after creation/selection -->
+    <div *ngIf="moduleCreated() && !showModuleForm()" class="module-summary" style="display: flex; align-items: center; gap: 16px;">
+      <mat-icon color="primary">folder</mat-icon>
+      <span class="summary-label">Selected Module:</span>
+      <span class="summary-value">{{ createdModuleName() }}</span>
+      <button (click)="resetModuleSelection()" class="btn-cancel-module" style="margin-left: 16px;">
+        <mat-icon>cancel</mat-icon>
+        Change Module
+      </button>
+    </div>
   </div>
-  </div>
+
+  <!-- Divider between steps -->
+  <div class="step-divider"></div>
 
   <!-- Step 2: Module Attributes (Optional) -->
   <div class="workflow-step" [class.disabled]="!moduleCreated()">
