@@ -14,16 +14,16 @@
   padding: 10px 16px;
   margin: 12px 0 0 0;
   font-size: 1.08em;
-  color: #2d3a4a;
+  color: #829dbe;
   box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 .summary-label {
   font-weight: 500;
-  color: #3b4a5a;
+  color: #95a6b8;
 }
 .summary-value {
   font-weight: 600;
-  color: #1a2a3a;
+  color: #728598;
 }
 .step-divider {
   height: 1px;

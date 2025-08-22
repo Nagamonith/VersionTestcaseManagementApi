@@ -101,7 +101,7 @@
 /* Main Content */
 .main-content {
   flex: 1;
-  padding: 30px;
+  padding: 15px 20px; /* reduce padding */
   overflow-y: auto;
   background-color: #f5f7fa;
   transition: margin-left 0.3s ease;
@@ -109,13 +109,16 @@
 
 /* Current Product */
 .current-product {
-  font-size: 1.1rem;
-  margin-bottom: 20px;
-  background: #e1eefc;
-  padding: 12px 20px;
-  border-left: 4px solid #a300cc;
-  border-radius: 6px;
+  font-size: 0.9rem;          /* slightly smaller text */
+  margin-bottom: 10px;        /* less gap below */
+  margin-top: -10px;          /* pulls it up */
+  background: #eaf4ff;        /* softer background */
+  padding: 6px 12px;          /* reduced padding */
+  border-left: 3px solid #a300cc; /* thinner border */
+  border-radius: 4px;         /* smaller radius */
+  display: inline-block;      /* makes it look less like a full bar */
 }
+
 
 /* No Product Selected */
 .no-product-selected {

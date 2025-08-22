@@ -52,15 +52,29 @@ textarea:focus {
 
 .filters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); /* smaller width */
+  gap: 8px;  /* reduce gap */
+  margin-bottom: 12px; /* reduce bottom margin */
+}
+
+.filters .filter-group label {
+  font-size: 12px;   /* smaller label */
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.filters .filter-group input,
+.filters .filter-group select {
+  font-size: 12px;    /* smaller text inside input/select */
+  padding: 6px 8px;   /* smaller padding */
+  border-radius: 6px;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
+ 
   font-size: 14px;
   table-layout: auto;
 }
@@ -126,10 +140,13 @@ tbody tr:hover {
 }
 
 .btn-small-back {
+  text-align: right;
   background-color: #236fe0;
   color: #fff;
-  border-radius: 80px;
-  margin-right: 8px;
+  border-radius: 50px;
+  font-size: 12px;   /* smaller text */
+  padding: 4px 10px; /* smaller button size */
+  cursor: pointer;
 }
 
 .btn-small-back:hover {
@@ -140,6 +157,11 @@ tbody tr:hover {
   background-color: rgb(227, 226, 238);
   padding: 6px 12px;
   font-size: 13px;
+}
+.button-group {
+  display: flex;
+  gap: 6px; /* space between buttons */
+   justify-content: flex-end; 
 }
 
 /* No result block */
@@ -226,7 +248,20 @@ textarea {
   border-radius: 6px;
   font-size: 14px;
 }
-
+.btn-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex; /* make sure it's displayed */
+  align-items: center;
+  justify-content: center;
+  color: #000000; /* visible red */
+}
+.icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor; /* make SVG take button color */
+}
 
 .form-actions {
   display: flex;
@@ -240,13 +275,40 @@ textarea {
  .actions {
   display: flex;
   gap: 6px;
-}
+}   
 .test-case-table td.actions {
   display: flex;
   flex-direction: column;  
    gap: 6px;                
   align-items: flex-start;
 }
+/* Scrollable wrapper */
+.table-container {
+  max-height: 600px;   /* adjust to your needs */
+  overflow-y: auto;
+  overflow-x: auto;
+   scroll-behavior:smooth;
+}
+
+
+
+/* Make header sticky */
+.test-case-table thead th {
+  position: sticky;
+  top: 0;
+  background: #5977ef;   /* same as your current header color */
+  color: #dae2e9;
+  font-weight: 600;
+  z-index: 2;  /* keep above rows */
+}
+.module-title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 20px;
+  margin-top: -40px; /* moves it a little up */
+  margin-bottom: 8px; /* spacing before buttons */
+}
+
 
 /* Responsive */
 @media (max-width: 768px) {

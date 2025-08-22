@@ -70,9 +70,9 @@
                 </a>
               </li>
               <li>
-                <a [routerLink]="['/tester/automation-result']" [queryParams]="{ productId: product.id, productName: product.name }">
+                <!-- <a [routerLink]="['/tester/automation-result']" [queryParams]="{ productId: product.id, productName: product.name }">
   ➟ Automation Results
-</a>
+</a> -->
 
               </li>
             </ul>
@@ -95,12 +95,8 @@
   <!-- Main Content -->
   <div class="main-content">
     <div *ngIf="currentProductName" class="current-product">
-      🔧 Product: <strong>{{ currentProductName }}</strong>
+     Product: <strong>{{ currentProductName }}</strong>
     </div>
-
-
-    
-
-    <router-outlet></router-outlet>
+<router-outlet></router-outlet>
   </div>
 </div>

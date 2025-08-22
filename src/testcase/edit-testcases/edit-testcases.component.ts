@@ -11,6 +11,8 @@ import { ChangeDetectorRef } from '@angular/core';
 import { ModuleService } from 'src/app/shared/services/module.service';
 import { catchError, forkJoin, map, Observable, of, switchMap, tap, throwError, Subject, takeUntil } from 'rxjs';
 import { IdResponse } from 'src/app/shared/modles/product.model';
+import { LeftnavIcon } from 'src/app/leftnavbartree/leftnavigationbar/leftnavigationbar-icon.enum';
+
 
 interface TestCaseFilter {
   testCaseId: string;
@@ -34,6 +36,8 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
   private moduleService = inject(ModuleService);
   private cdr = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
+  public leftNavIcon = LeftnavIcon;
+
 
   selectedModule = signal<string>('');
   productId = signal<string>('');
@@ -108,6 +112,7 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
         // Version options will be loaded when module is selected
       }
     });
+    
   }
 
   // FIXED: Return Observable and handle subscription properly

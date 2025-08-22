@@ -7,25 +7,29 @@
   (onCancel)="handleCancelDelete()">
 </app-alert>
 
-<!-- <div class="container"> -->
-  <h2 class="text-center">Test Case Management</h2>
+<!-- <div class="container">
+  <h4 class="text-center">Test Case Management</h4> -->
 
   <!-- Module and Version display -->
-  <div class="module-info">
-    <div style="text-align:center"><strong>Module:</strong> {{ getModuleName(selectedModule()) }}</div>
-    <button class="btn-small-back" (click)="openForm()">Add New Test Case</button>
-    <button style="text-align:right;" class="btn-small-back" (click)="goBack()"> Change Module</button>
-    <button class="btn-small-back" (click)="openModuleAttributes()"> Module Attributes</button>
-    <button class="btn-small-back" (click)="refreshVersionOptions()" title="Refresh version options"> Refresh Versions</button>
-    <!-- <div class="debug-info" style="font-size: 12px; color: #666; margin-top: 5px;">
-      <strong>Debug:</strong> {{ versionOptions().length }} version options loaded
-    </div> -->
+<div class="module-info">
+  <div class="module-title">
+    <strong> TestCases Module:</strong> {{ getModuleName(selectedModule()) }}
   </div>
+
+  <div class="button-group">
+    <button class="btn-small-back" (click)="openForm()">Add New Test Case</button>
+    <button class="btn-small-back" (click)="goBack()">Change Module</button>
+    <button class="btn-small-back" (click)="openModuleAttributes()">Module Attributes</button>
+    <button class="btn-small-back" (click)="refreshVersionOptions()" title="Refresh version options">Refresh</button>
+  </div>
+</div>
+
+
 
   <!-- Filters -->
    <br />
   <div class="filters-container">
-    <label>Search Filters</label>
+    <!-- <label>Search Filters</label> -->
     <div class="filters">
       <div class="filter-group">
         <label>Test Case ID:</label>
