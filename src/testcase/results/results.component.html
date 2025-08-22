@@ -62,7 +62,7 @@
 
     <div class="export-buttons">
       <button class="export-btn" (click)="exportAllTestSuites()">
-        <span class="export-icon">⬇️</span> Export All Test Suites
+        <span [innerHTML]="icons.ImportExcel"></span> Export All Test Suites
       </button>
     </div>
 
@@ -81,11 +81,11 @@
           </div>
           <div class="suite-actions">
             <button class="export-btn" (click)="$event.stopPropagation(); exportSingleSuite(suite.suiteId)">
-              Export
+              <span [innerHTML]="icons.ImportExcel"></span>Export
             </button>
           </div>
           <div class="expand-icon">
-            {{ isSuiteExpanded(suite.suiteId) ? '▼' : '►' }}
+            <h1> {{ isSuiteExpanded(suite.suiteId) ? '«' : '»' }}</h1>
           </div>
         </div>
       </div>

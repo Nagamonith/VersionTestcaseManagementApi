@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TestSuiteService } from 'src/app/shared/services/test-suite.service';
+import { LeftnavIcon } from 'src/app/leftnavbartree/leftnavigationbar/leftnavigationbar-icon.enum';
 import { TestCaseService } from 'src/app/shared/services/test-case.service';
 import { 
   TestSuiteResponse, 
@@ -45,6 +46,7 @@ export class TestSuiteComponent {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
+  public icons : any = LeftnavIcon;
 
   // Form fields
   suiteName = '';

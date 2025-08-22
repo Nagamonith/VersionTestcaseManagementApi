@@ -82,10 +82,17 @@ background-color:#2152f3;
   justify-content: flex-end;
   gap: 10px;
 }
-
-.btn-primary, .btn-save {
+.btn-cancels{
+  background-color: #dadada;
+}
+.btn-primary{
   background-color: #2152f3;
-  color:aliceblue;
+  color: white;
+  border: none;
+} 
+.btn-save  {
+  /* background-color: #2152f3; */
+  color:rgb(0, 0, 0);
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -93,16 +100,18 @@ background-color:#2152f3;
 }
 
 .btn-edit {
-  background-color: #2196F3;
+  /* background-color: #2196F3; */
   color: white;
   border: none;
   padding: 6px 12px;
   border-radius: 4px;
   cursor: pointer;
 }
-
-.btn-delete, .btn-remove, .btn-cancel {
-  background-color: #f44336;
+.btn-removes{
+  background-color: #dadada;
+}
+.btn-delete   {
+  /* background-color: #f44336; */
   color: white;
   border: none;
   padding: 6px 12px;

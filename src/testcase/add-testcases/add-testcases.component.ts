@@ -9,6 +9,7 @@ import { ProductModule } from 'src/app/shared/modles/module.model';
 import { ProductVersionRequest, IdResponse } from 'src/app/shared/modles/product.model';
 import { catchError, of } from 'rxjs';
 import { ManualTestCaseStep, TestCaseAttribute, TestCaseDetailResponse } from 'src/app/shared/modles/test-case.model';
+import { LeftnavIcon } from 'src/app/leftnavbartree/leftnavigationbar/leftnavigationbar-icon.enum';
 
 @Component({
   selector: 'app-add-testcases',
@@ -21,6 +22,7 @@ export class AddTestcasesComponent implements OnInit {
   private testCaseService = inject(TestCaseService);
   private moduleService = inject(ModuleService);
   private route = inject(ActivatedRoute);
+  public icons = LeftnavIcon;
 
   selectedModule = signal<string | null>(null);
   selectedVersion = signal<string | null>(null);

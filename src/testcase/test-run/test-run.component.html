@@ -20,7 +20,7 @@
 
     <div class="action-buttons">
       <button class="btn-primary" (click)="startAddNewRun()" [disabled]="isLoadingSuites()">
-        Add New Test Run
+       <span [innerHTML]="icons.Add"></span> Add  Test Run
       </button>
     </div>
 
@@ -49,12 +49,12 @@
               <button class="btn-edit" 
                       (click)="startEditRun(run.id)"
                       [disabled]="isLoadingSuites()">
-                Edit
+               <span [innerHTML]="icons.Edit">Edit</span>
               </button>
               <button class="btn-delete" 
                       (click)="confirmDeleteRun(run.id)"
                       [disabled]="isLoadingSuites()">
-                Delete
+               <span [innerHTML]="icons.Delete">Delete</span>
               </button>
             </td>
           </tr>

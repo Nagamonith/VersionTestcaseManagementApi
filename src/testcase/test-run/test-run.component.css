@@ -47,14 +47,14 @@ th {
 }
 
 .btn-edit {
-  background-color: #7a80ff;
+  /* background-color: #7a80ff; */
   color: rgb(255, 255, 255);
   border: none;
   border-radius: 4px;
 }
 
 .btn-delete {
-  background-color: #dc3545;
+  /* background-color: #dc3545; */
   color: white;
   border: none;
   border-radius: 4px;

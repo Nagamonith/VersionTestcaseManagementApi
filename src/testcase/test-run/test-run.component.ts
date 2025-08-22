@@ -11,6 +11,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { catchError, finalize, forkJoin, map, of, switchMap, tap } from 'rxjs';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { LeftnavIcon } from 'src/app/leftnavbartree/leftnavigationbar/leftnavigationbar-icon.enum';
 
 @Component({
   selector: 'app-test-run',
@@ -31,6 +32,7 @@ export class TestRunComponent implements OnInit {
   private testSuiteService = inject(TestSuiteService);
   private route = inject(ActivatedRoute);
   private snackBar = inject(MatSnackBar);
+  public icons: any = LeftnavIcon;
 
   // Form fields
   runName = '';

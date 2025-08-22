@@ -36,7 +36,8 @@ export class EditTestcasesComponent implements OnInit, OnDestroy {
   private moduleService = inject(ModuleService);
   private cdr = inject(ChangeDetectorRef);
   private destroy$ = new Subject<void>();
-  public leftNavIcon = LeftnavIcon;
+  // public leftNavIcon = LeftnavIcon;
+  public icons : any = LeftnavIcon;
 
 
   selectedModule = signal<string>('');

@@ -17,10 +17,10 @@
   </div>
 
   <div class="button-group">
-    <button class="btn-small-back" (click)="openForm()">Add New Test Case</button>
-    <button class="btn-small-back" (click)="goBack()">Change Module</button>
-    <button class="btn-small-back" (click)="openModuleAttributes()">Module Attributes</button>
-    <button class="btn-small-back" (click)="refreshVersionOptions()" title="Refresh version options">Refresh</button>
+    <button class="btn-small-back" (click)="openForm()"><span [innerHTML]="icons.Add"></span> Test Case</button>
+    <button class="btn-small-back" (click)="goBack()"><span [innerHTML]="icons.Change"></span> Change Module</button>
+    <button class="btn-small-back" (click)="openModuleAttributes()"><span [innerHTML]="icons.Add"></span>Module Attributes</button>
+    <button class="btn-small-back" (click)="refreshVersionOptions()" title="Refresh version options"><span [innerHTML]="icons.Refresh"></span> Refresh</button>
   </div>
 </div>
 
@@ -32,7 +32,7 @@
     <!-- <label>Search Filters</label> -->
     <div class="filters">
       <div class="filter-group">
-        <label>Test Case ID:</label>
+        <label>Test Case ID <span [innerHTML]="icons.Filter"></span></label>
         <input
           type="text"
           placeholder="Filter by TestCase ID"
@@ -42,7 +42,7 @@
       </div>
       
       <div class="filter-group">
-        <label>Use Case:</label>
+       <label>Use Case </label>
         <input
           type="text"
           placeholder="Filter by Use Case"
@@ -52,7 +52,7 @@
       </div>
       
       <div class="filter-group">
-        <label>Version:</label>
+        <label>Version<span [innerHTML]="icons.Filter"></span></label>
         <select
           [ngModel]="filter().version"
           (ngModelChange)="updateFilter('version', $event)"
@@ -113,8 +113,8 @@
           </td>
           
           <td class="actions">
-            <button class="btn-small" (click)="startEditing(testCase)">Edit</button>
-            <button class="btn-small-danger" (click)="deleteTestCase(testCase.id, $event)">Delete</button>
+            <button class="btn-small" (click)="startEditing(testCase)"><span [innerHTML]="icons.Edit">Edit</span></button>
+            <button class="btn-small" (click)="deleteTestCase(testCase.id, $event)"> <span [innerHTML]="icons.Delete">Delete</span></button>
           </td>
         </tr>
       </tbody>
@@ -231,8 +231,8 @@
       </div>
 
       <div class="form-actions">
-        <button type="submit" class="btn-save" [disabled]="form.invalid">Save</button>
-        <button type="button" class="btn-small-danger" (click)="cancelEditing()">Cancel</button>
+        <button type="submit" class="btn" [disabled]="form.invalid"><span [innerHTML]="icons.Save">Save</span> Save</button>
+        <button type="button" class="btn-small-danger" (click)="cancelEditing()"><span [innerHTML]="icons.Cancel"></span>Cancel</button>
       </div>
     </form>
   </div>

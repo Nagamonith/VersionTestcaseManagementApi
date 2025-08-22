@@ -1710,15 +1710,15 @@ isFormInitialized(): boolean {
     return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
   }
 
-  getFileName(url: string): string {
-    if (!url) return '';
-    const parts = url.split('/');
-    const lastPart = parts[parts.length - 1];
-    const filenamePart = lastPart.split(';')[0];
-    return filenamePart.length > 20 
-      ? filenamePart.substring(0, 17) + '...' 
-      : filenamePart;
-  }
+  getFileName(url: any): string {
+  if (!url || typeof url !== 'string') return '';
+  const parts = url.split('/');
+  const lastPart = parts[parts.length - 1];
+  const filenamePart = lastPart.split(';')[0];
+  return filenamePart.length > 20 
+    ? filenamePart.substring(0, 17) + '...' 
+    : filenamePart;
+}
 
   // Popup methods
   openPopup(index: number, field: 'actual' | 'remarks', event: MouseEvent): void {

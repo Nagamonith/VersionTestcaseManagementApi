@@ -6,4 +6,5 @@ export interface UploadResponse {
   fileSize: number;
   uploadedAt: Date;
   testCaseId?: string;
+  
 }

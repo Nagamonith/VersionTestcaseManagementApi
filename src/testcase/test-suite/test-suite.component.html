@@ -29,7 +29,7 @@
         class="btn-primary" 
         (click)="startAddNewSuite()"
         [disabled]="isLoadingSuites()"> 
-        <span *ngIf="!isLoadingSuites()">Add New Test Suite</span>
+        <span *ngIf="!isLoadingSuites()"><span [innerHTML]="icons.Add"></span> Add Test Suite</span>
         <span *ngIf="isLoadingSuites()">Loading...</span>
       </button>
     </div>
@@ -78,14 +78,14 @@
                   (click)="startEditSuite(suite.id!)"
                   [disabled]="isLoading()"
                   title="Edit Test Suite">
-                  Edit
+                   <span [innerHTML]="icons.Edit">Edit</span>
                 </button>
                 <button 
                   class="btn-delete" 
                   (click)="confirmDeleteSuite(suite.id!)"
                   [disabled]="isLoading()"
                   title="Delete Test Suite">
-                  Delete
+                  <span [innerHTML]="icons.Delete">Delete</span>
                 </button>
               </td>
             </tr>
@@ -110,13 +110,13 @@
   <div *ngIf="mode() !== 'list'" class="edit-view">
     <div class="page-header">
       <h2 class="text-center">{{ mode() === 'add' ? 'Add New' : 'Edit' }} Test Suite</h2>
-      <p *ngIf="mode() === 'edit'" class="edit-info">Editing: {{ selectedSuiteId() }}</p>
+      <!-- <p *ngIf="mode() === 'edit'" class="edit-info">Editing: {{ selectedSuiteId() }}</p> -->
     </div>
 
     <div class="form-container">
       <!-- Basic Information -->
       <div class="form-section">
-        <h3>Basic Information</h3>
+        <!-- <h3>Basic Information</h3> -->
         
         <div class="form-group">
           <label for="suiteName" class="required">Test Suite Name</label>
@@ -264,10 +264,10 @@
                   <td class="version">{{ testCase.version || testCase.productVersionName || '-' }}</td>
                   <td class="actions">
                     <button 
-                      class="btn-remove" 
+                      class="btn-removes" 
                       (click)="removeSelectedTestCase(testCase.id!)"
                       title="Remove from selection">
-                      Remove
+                      Remove <span [innerHTML]="icons.Remove"></span>
                     </button>
                   </td>
                 </tr>
@@ -284,17 +284,18 @@
           (click)="saveTestSuite()"
           [disabled]="!canSave()">
           <span *ngIf="!isSaving()">
-            {{ mode() === 'add' ? 'Create' : 'Update' }} Test Suite
+            {{ mode() === 'add' ? 'Create' : 'Update' }} <span [innerHTML]="icons.Save"></span>
           </span>
           <span *ngIf="isSaving()">
             {{ mode() === 'add' ? 'Creating...' : 'Updating...' }}
           </span>
         </button>
         <button 
-          class="btn-cancel" 
+          class="btn-cancels" 
           (click)="cancelEdit()"
           [disabled]="isSaving()">
           Cancel
+         <span [innerHTML]="icons.Cancel"></span>
         </button>
       </div>
 

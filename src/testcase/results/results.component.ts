@@ -8,6 +8,7 @@ import { TestSuiteService } from 'src/app/shared/services/test-suite.service';
 import { ActivatedRoute } from '@angular/router';
 import { of, BehaviorSubject, switchMap, combineLatest, firstValueFrom, forkJoin, map, catchError } from 'rxjs';
 import { TestCaseDetailResponse } from 'src/app/shared/modles/test-case.model';
+import { LeftnavIcon } from 'src/app/leftnavbartree/leftnavigationbar/leftnavigationbar-icon.enum';
 
 @Component({
   selector: 'app-results',
@@ -21,6 +22,7 @@ export class ResultsComponent implements OnInit {
   private testRunService = inject(TestRunService);
   private testSuiteService = inject(TestSuiteService);
   private route = inject(ActivatedRoute);
+  public icons = LeftnavIcon;
 
   // Private signals for selections and UI state
   private _selectedModule = signal<string>('');
