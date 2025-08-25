@@ -264,6 +264,33 @@ getTestSuites(productId: string): Observable<TestSuiteResponse[]> {
       })
     );
   }
+  // Add this method to TestSuiteService
+uploadTestCaseFile(suiteId: string, testCaseId: string, file: File, uploadedBy: string) {
+  return new Observable<any>(observer => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      const payload = {
+        file: null,
+        base64File: base64,
+        fileName: file.name,
+        fileType: file.type,
+        uploadedBy: uploadedBy,
+        contentType: file.type
+      };
+      this.http.post<any>(
+        `${this.apiUrl}/api/testsuites/${suiteId}/testcases/${testCaseId}/uploads`,
+        payload,
+        { headers: new HttpHeaders({ 'Content-Type': 'application/json' }) }
+      ).subscribe({
+        next: res => { observer.next(res); observer.complete(); },
+        error: err => { observer.error(err); }
+      });
+    };
+    reader.onerror = err => observer.error(err);
+    reader.readAsDataURL(file);
+  });
+}
 
   assignTestCasesToSuite(testSuiteId: string, request: AssignTestCasesRequest): Observable<void> {
     if (!testSuiteId?.trim()) {

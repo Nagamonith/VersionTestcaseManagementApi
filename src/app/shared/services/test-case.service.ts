@@ -533,6 +533,9 @@ export class TestCaseService {
       `${this.apiUrl}/products/${productId}/modules/${moduleId}`
     );
   }
+  uploadFile(formData: FormData) {
+  return this.http.post<any>(`${this.apiUrl}/uploads/file`, formData);
+}
 
 // Fixed TestCaseService - Sync Module Attributes Method
 // Replace the existing syncModuleAttributesToTestCases method in your TestCaseService

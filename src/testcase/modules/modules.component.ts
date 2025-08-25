@@ -1,3 +1,4 @@
+
 import {
   Component,
   OnInit,
@@ -1667,30 +1668,77 @@ isFormInitialized(): boolean {
   }
 
   // Upload methods
-  onUpload(event: Event, index: number): void {
-    const input = event.target as HTMLInputElement;
-    if (input.files && input.files.length > 0) {
-      if (!this.uploads[index]) {
-        this.uploads[index] = [];
-      }
+onUpload(event: Event, rowIndex: number): void {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || input.files.length === 0) return;
 
-      Array.from(input.files).forEach(file => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const url = e.target?.result as string;
-          this.uploads[index].push({ 
-            url: this.sanitizer.bypassSecurityTrustUrl(url) as string,
-            loaded: false 
-          });
-          this.cdRef.detectChanges();
-        };
-        reader.readAsDataURL(file);
-      });
+  const file = input.files[0];
+  const testCase = this.versionTestCases()[rowIndex];
+  if (!testCase) return;
 
-      input.value = '';
+  // Show loading spinner in UI
+  if (!this.uploads[rowIndex]) this.uploads[rowIndex] = [];
+  this.uploads[rowIndex].push({ url: '', loaded: false });
+
+  // Prepare FormData for /api/uploads/file
+  const formData = new FormData();
+  formData.append('File', file);
+  formData.append('TestCaseId', testCase.id); // Use DB id, not testCaseId string
+  formData.append('UploadedBy', 'frontend-user'); // Replace with actual user if available
+
+  // If in test suite context, use suite upload API
+  if (this.showTestSuites || this.showTestRuns) {
+    // Find suiteId for this test case
+    let suiteId = null;
+    if (this.showTestSuites && this.selectedModule()) {
+      suiteId = this.selectedModule();
+    } else if (this.showTestRuns && this.selectedSuiteIds.length === 1) {
+      suiteId = this.selectedSuiteIds[0];
     }
+    if (!suiteId) {
+      this.showAlertMessage('Suite ID not found for upload', 'error');
+      return;
+    }
+
+    // Use /api/testsuites/{testSuiteId}/testcases/{testCaseId}/uploads
+    this.testSuiteService.uploadTestCaseFile(suiteId, testCase.id, file, 'frontend-user')
+      .subscribe({
+        next: (uploadResp: any) => {
+          // Remove loading spinner and add uploaded file
+          this.uploads[rowIndex].pop();
+          this.uploads[rowIndex].push({ url: uploadResp.filePath || uploadResp.fileUrl, loaded: true });
+          // Update testCase.uploads
+          if (!testCase.uploads) testCase.uploads = [];
+          testCase.uploads.push(uploadResp.filePath || uploadResp.fileUrl);
+          this.cdRef.detectChanges();
+        },
+        error: err => {
+          this.uploads[rowIndex].pop();
+          this.showAlertMessage('Upload failed', 'error');
+          this.cdRef.detectChanges();
+        }
+      });
+  } else {
+    // Use /api/uploads/file for module context
+    this.testCaseService.uploadFile(formData)
+      .subscribe({
+        next: (uploadResp: any) => {
+          this.uploads[rowIndex].pop();
+          this.uploads[rowIndex].push({ url: uploadResp.filePath || uploadResp.fileUrl, loaded: true });
+          if (!testCase.uploads) testCase.uploads = [];
+          testCase.uploads.push(uploadResp.filePath || uploadResp.fileUrl);
+          this.cdRef.detectChanges();
+        },
+        error: err => {
+          this.uploads[rowIndex].pop();
+          this.showAlertMessage('Upload failed', 'error');
+          this.cdRef.detectChanges();
+        }
+      });
   }
 
+  input.value = '';
+}
   onImageLoad(event: Event, rowIndex: number, fileIndex: number): void {
     if (this.uploads[rowIndex] && this.uploads[rowIndex][fileIndex]) {
       this.uploads[rowIndex][fileIndex].loaded = true;
@@ -2046,5 +2094,58 @@ isFormInitialized(): boolean {
       this.filter.attributeKey ||
       this.filter.attributeValue
     );
+  }
+  /**
+   * Upload a file for a test suite test case and update the UI state.
+   * @param file The file to upload
+   * @param suiteId The test suite ID
+   * @param testCaseId The test case ID (DB id)
+   * @param rowIndex The row index in the table (for UI state)
+   */
+  uploadTes(file: File, suiteId: string, testCaseId: string, rowIndex: number): void {
+    if (!file || !suiteId || !testCaseId) {
+      this.showAlertMessage('Missing file, suite, or test case information', 'error');
+      return;
+    }
+
+    // Show loading spinner in UI
+    if (!this.uploads[rowIndex]) this.uploads[rowIndex] = [];
+    this.uploads[rowIndex].push({ url: '', loaded: false });
+
+    // Use /api/testsuites/{testSuiteId}/testcases/{testCaseId}/uploads
+    this.testSuiteService.uploadTestCaseFile(suiteId, testCaseId, file, 'frontend-user')
+      .subscribe({
+        next: (uploadResp: any) => {
+          // Remove loading spinner and add uploaded file
+          this.uploads[rowIndex].pop();
+          // Always use fileUrl for rendering (never filePath)
+          const fileUrl = uploadResp.fileUrl ? uploadResp.fileUrl : uploadResp.filePath;
+          this.uploads[rowIndex].push({ url: fileUrl, loaded: true });
+          // Update testCase.uploads
+          const testCase = this.versionTestCases()[rowIndex];
+          if (testCase) {
+            if (!testCase.uploads) testCase.uploads = [];
+            testCase.uploads.push(fileUrl);
+          }
+          this.cdRef.detectChanges();
+        },
+        error: err => {
+          this.uploads[rowIndex].pop();
+          this.showAlertMessage('Upload failed', 'error');
+          this.cdRef.detectChanges();
+        }
+      });
+  }
+    /**
+   * Handles file input change for suite/run context and calls uploadTes.
+   */
+  onSuiteUpload(event: Event, rowIndex: number, testCaseId: string): void {
+    const input = event.target as HTMLInputElement;
+    if (input && input.files && input.files.length > 0) {
+      let suiteId = this.showTestSuites ? this.selectedModule() : (this.showTestRuns && this.selectedSuiteIds.length === 1 ? this.selectedSuiteIds[0] : '');
+      if (!suiteId) suiteId = '';
+      this.uploadTes(input.files[0], suiteId, testCaseId, rowIndex);
+      input.value = '';
+    }
   }
 }

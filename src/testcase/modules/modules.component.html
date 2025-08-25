@@ -381,7 +381,14 @@
               </td>
 
               <td class="uploads-cell">
-                <label class="file-upload-label">
+                <!-- Use uploadTes for suite/run context, fallback to onUpload for module context -->
+                <label class="file-upload-label" *ngIf="showTestSuites || showTestRuns">
+                  <input type="file" accept="image/*, .pdf, .txt" (change)="onSuiteUpload($event, i, tc.id)">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </label>
+                <label class="file-upload-label" *ngIf="!showTestSuites && !showTestRuns">
                   <input type="file" (change)="onUpload($event, i)" accept="image/*, .pdf, .txt" multiple>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
