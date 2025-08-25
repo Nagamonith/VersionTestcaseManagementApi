@@ -171,20 +171,20 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Fixed column definitions with proper field mappings
   viewColumns: TableColumn[] = [
-    { field: 'slNo', header: 'Sl No', width: 80, noResize: true },
-    { field: 'version', header: 'Version', width: 100 },
-    { field: 'useCase', header: 'Use Case', width: 150 },
-    { field: 'testCaseId', header: 'Test Case ID', width: 120 },
+    { field: 'slNo', header: 'Sl No', width: 40, noResize: true },
+    { field: 'version', header: 'Version', width: 70 },
+    { field: 'useCase', header: 'Use Case', width: 100 },
+    { field: 'testCaseId', header: 'Test Case ID', width: 80 },
     { field: 'scenario', header: 'Scenario', width: 200 },
     { field: 'steps', header: 'Steps', width: 200 },
     { field: 'expected', header: 'Expected', width: 200 }
   ];
 
   testColumns: TableColumn[] = [
-    { field: 'slNo', header: 'Sl No', width: 80, noResize: true },
-    { field: 'version', header: 'Version', width: 100 },
-    { field: 'useCase', header: 'Use Case', width: 150 },
-    { field: 'testCaseId', header: 'Test Case ID', width: 120 },
+    { field: 'slNo', header: 'Sl No', width: 40, noResize: true },
+    { field: 'version', header: 'Version', width: 70 },
+    { field: 'useCase', header: 'Use Case', width: 100 },
+    { field: 'testCaseId', header: 'Test Case ID', width: 80 },
     { field: 'scenario', header: 'Scenario', width: 200 },
     { field: 'steps', header: 'Steps', width: 200 },
     { field: 'expected', header: 'Expected', width: 200 }

@@ -318,10 +318,10 @@
                 {{ col.header }}
                 <div class="resize-handle"></div>
               </th>
-              <th>Actual Result</th>
-              <th>Result</th>
-              <th>Remarks</th>
-              <th>Uploads</th>
+              <th class="sticky-col sticky-actual">Actual Result</th>
+              <th class="sticky-col sticky-result">Result</th>
+              <th class="sticky-col sticky-remarks">Remarks</th>
+              <th class="sticky-col sticky-uploads">Uploads</th>
             </tr>
           </thead>
           <tbody>
@@ -342,7 +342,7 @@
                 {{ getCellValue(tc, col.field) }}
               </td>
 
-              <td class="wrap-text">
+              <td class="wrap-text sticky-col sticky-actual">
                 <div class="popup-cell" (click)="openPopup(i, 'actual', $event)">
                   <span>{{ getFormControl(i, 'actual').value || 'Click to enter' }}</span>
                   <div *ngIf="isPopupOpen && popupIndex === i && popupField === 'actual'" class="popup-box">
@@ -357,7 +357,7 @@
               </td>
 
               <!-- Result dropdown updated -->
-              <td class="wrap-text">
+              <td class="wrap-text sticky-col sticky-result">
                 <select [formControl]="getFormControl(i, 'result')" class="result-select">
                   <option value="Pending">Pending</option>
                   <option value="Pass">Pass</option>
@@ -366,7 +366,7 @@
                 </select>
               </td>
 
-              <td class="wrap-text">
+              <td class="wrap-text sticky-col sticky-remarks">
                 <div class="popup-cell" (click)="openPopup(i, 'remarks', $event)">
                   <span>{{ getFormControl(i, 'remarks').value || 'Click to enter' }}</span>
                   <div *ngIf="isPopupOpen && popupIndex === i && popupField === 'remarks'" class="popup-box">
@@ -380,7 +380,7 @@
                 </div>
               </td>
 
-              <td class="uploads-cell">
+              <td class="uploads-cell sticky-col sticky-uploads">
                 <!-- Use uploadTes for suite/run context, fallback to onUpload for module context -->
                 <label class="file-upload-label" *ngIf="showTestSuites || showTestRuns">
                   <input type="file" accept="image/*, .pdf, .txt" (change)="onSuiteUpload($event, i, tc.id)">
