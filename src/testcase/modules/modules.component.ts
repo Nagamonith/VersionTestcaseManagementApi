@@ -57,7 +57,9 @@ interface TableColumn {
 }
 
 interface UploadedFile {
-  url: string;
+  id: string;
+  fileType: string;
+  fileName: string;
   loaded: boolean;
 }
 
@@ -238,7 +240,7 @@ export class ModulesComponent implements OnInit, OnDestroy, AfterViewInit {
     result: formValues[index]?.result || 'Pending',
     actual: (formValues[index]?.actual || '').trim(),
     remarks: (formValues[index]?.remarks || '').trim(),
-    uploads: this.uploads[index]?.map(u => u.url) || [],
+    uploads: this.uploads[index]?.map(u => u.id) || [],
     testRunId: this.showTestRuns ? this.selectedTestRunId() : undefined
   }));
 
@@ -1304,11 +1306,23 @@ startTestingSelected(): void {
     
     this.formArray.push(formGroup);
     
-    this.uploads.push(
-      testCase.uploads 
-        ? testCase.uploads.map(url => ({ url, loaded: true })) 
-        : []
-    );
+    // When initializing uploads array for each test case
+this.uploads.push(
+  testCase.uploads
+    ? testCase.uploads.map((u: any) => {
+        // If u is a string (file path or URL), extract the UUID at the end
+        let id = typeof u === 'string'
+          ? (u.match(/[0-9a-fA-F-]{36}$/)?.[0] || u)
+          : (u.id || '');
+        return {
+          id,
+          fileType: u.fileType || '',
+          fileName: u.fileName || '',
+          loaded: true
+        };
+      })
+    : []
+);
   });
 
   console.log('Form array length after initialization:', this.formArray.length);
@@ -1352,7 +1366,7 @@ startTestingSelected(): void {
       result: formValues[index]?.result || 'Pending',
       actual: (formValues[index]?.actual || '').trim(),
       remarks: (formValues[index]?.remarks || '').trim(),
-      uploads: this.uploads[index]?.map(u => u.url) || [],
+      uploads: this.uploads[index]?.map(u => u.id) || [],
       testRunId: this.showTestRuns ? this.selectedTestRunId() : undefined
     }));
 
@@ -1678,7 +1692,7 @@ onUpload(event: Event, rowIndex: number): void {
 
   // Show loading spinner in UI
   if (!this.uploads[rowIndex]) this.uploads[rowIndex] = [];
-  this.uploads[rowIndex].push({ url: '', loaded: false });
+  this.uploads[rowIndex].push({ id: '', fileType: '', fileName: '', loaded: false });
 
   // Prepare FormData for /api/uploads/file
   const formData = new FormData();
@@ -1706,7 +1720,12 @@ onUpload(event: Event, rowIndex: number): void {
         next: (uploadResp: any) => {
           // Remove loading spinner and add uploaded file
           this.uploads[rowIndex].pop();
-          this.uploads[rowIndex].push({ url: uploadResp.filePath || uploadResp.fileUrl, loaded: true });
+          this.uploads[rowIndex].push({
+            id: uploadResp.filePath || uploadResp.fileUrl,
+            fileType: uploadResp.fileType || '',
+            fileName: this.getFileName(uploadResp.filePath || uploadResp.fileUrl),
+            loaded: true
+          });
           // Update testCase.uploads
           if (!testCase.uploads) testCase.uploads = [];
           testCase.uploads.push(uploadResp.filePath || uploadResp.fileUrl);
@@ -1724,7 +1743,12 @@ onUpload(event: Event, rowIndex: number): void {
       .subscribe({
         next: (uploadResp: any) => {
           this.uploads[rowIndex].pop();
-          this.uploads[rowIndex].push({ url: uploadResp.filePath || uploadResp.fileUrl, loaded: true });
+          this.uploads[rowIndex].push({
+            id: uploadResp.filePath || uploadResp.fileUrl,
+            fileType: uploadResp.fileType || '',
+            fileName: this.getFileName(uploadResp.filePath || uploadResp.fileUrl),
+            loaded: true
+          });
           if (!testCase.uploads) testCase.uploads = [];
           testCase.uploads.push(uploadResp.filePath || uploadResp.fileUrl);
           this.cdRef.detectChanges();
@@ -1753,10 +1777,7 @@ onUpload(event: Event, rowIndex: number): void {
     }
   }
 
-  isImage(url: string): boolean {
-    if (!url) return false;
-    return /\.(jpg|jpeg|png|gif|webp)$/i.test(url);
-  }
+  // removed legacy isImage(url)
 
   getFileName(url: any): string {
   if (!url || typeof url !== 'string') return '';
@@ -2107,25 +2128,22 @@ onUpload(event: Event, rowIndex: number): void {
       this.showAlertMessage('Missing file, suite, or test case information', 'error');
       return;
     }
-
-    // Show loading spinner in UI
     if (!this.uploads[rowIndex]) this.uploads[rowIndex] = [];
-    this.uploads[rowIndex].push({ url: '', loaded: false });
-
-    // Use /api/testsuites/{testSuiteId}/testcases/{testCaseId}/uploads
+    this.uploads[rowIndex].push({ id: '', fileType: '', fileName: '', loaded: false });
     this.testSuiteService.uploadTestCaseFile(suiteId, testCaseId, file, 'frontend-user')
       .subscribe({
         next: (uploadResp: any) => {
-          // Remove loading spinner and add uploaded file
           this.uploads[rowIndex].pop();
-          // Always use fileUrl for rendering (never filePath)
-          const fileUrl = uploadResp.fileUrl ? uploadResp.fileUrl : uploadResp.filePath;
-          this.uploads[rowIndex].push({ url: fileUrl, loaded: true });
-          // Update testCase.uploads
+          this.uploads[rowIndex].push({
+            id: uploadResp.id,
+            fileType: uploadResp.fileType,
+            fileName: uploadResp.fileName,
+            loaded: true
+          });
           const testCase = this.versionTestCases()[rowIndex];
           if (testCase) {
             if (!testCase.uploads) testCase.uploads = [];
-            testCase.uploads.push(fileUrl);
+            testCase.uploads.push(uploadResp.id);
           }
           this.cdRef.detectChanges();
         },
@@ -2147,5 +2165,27 @@ onUpload(event: Event, rowIndex: number): void {
       this.uploadTes(input.files[0], suiteId, testCaseId, rowIndex);
       input.value = '';
     }
+  }
+  getTestSuiteUploadUrl(uploadId: string, suiteId: string): string {
+  return `/api/testsuites/${suiteId}/testcases/uploads/${uploadId}`;
+}
+  deleteSuiteUpload(rowIndex: number, fileIndex: number, uploadId: string, suiteId: string) {
+    this.testSuiteService.deleteExecutionUpload(suiteId, uploadId).subscribe({
+      next: () => {
+        this.uploads[rowIndex].splice(fileIndex, 1);
+        const testCase = this.versionTestCases()[rowIndex];
+        if (testCase && testCase.uploads) {
+          testCase.uploads = testCase.uploads.filter((id: string) => id !== uploadId);
+        }
+        this.cdRef.detectChanges();
+      },
+      error: err => {
+        this.showAlertMessage('Failed to delete upload', 'error');
+      }
+    });
+  }
+
+  isImage(fileType: string | undefined): boolean {
+    return typeof fileType === 'string' && fileType.startsWith('image/');
   }
 }

@@ -396,19 +396,20 @@
                 </label>
 
                 <div class="upload-previews">
-                  <div *ngFor="let file of uploads[i]; let j = index" class="upload-preview">
-                    <div class="preview-container">
-                      <img *ngIf="isImage(file.url)" [src]="file.url"
-                           (load)="onImageLoad($event, i, j)"
-                           class="preview-image">
-                      <div *ngIf="!isImage(file.url)" class="file-preview">
-                        <span>{{ getFileName(file.url) }}</span>
-                      </div>
-                      <div class="loading-spinner" *ngIf="!file.loaded"></div>
-                    </div>
-                    <button class="remove-btn" (click)="removeUpload(i, j)">×</button>
-                  </div>
-                </div>
+  <div *ngFor="let file of uploads[i]; let j = index" class="upload-preview">
+    <div class="preview-container">
+      <img *ngIf="isImage(file.fileType)" 
+           [src]="getTestSuiteUploadUrl(file.id, (showTestSuites ? (selectedModule() || '') : (showTestRuns && selectedSuiteIds.length === 1 ? (selectedSuiteIds[0] || '') : '')))" 
+           (load)="onImageLoad($event, i, j)"
+           class="preview-image">
+      <div *ngIf="!isImage(file.fileType)" class="file-preview">
+        <a [href]="getTestSuiteUploadUrl(file.id, (showTestSuites ? (selectedModule() || '') : (showTestRuns && selectedSuiteIds.length === 1 ? (selectedSuiteIds[0] || '') : '')))" target="_blank">{{ file.fileName }}</a>
+      </div>
+      <div class="loading-spinner" *ngIf="!file.loaded"></div>
+    </div>
+  <button class="remove-btn" (click)="deleteSuiteUpload(i, j, file.id, (showTestSuites ? (selectedModule() || '') : (showTestRuns && selectedSuiteIds.length === 1 ? (selectedSuiteIds[0] || '') : '')))">×</button>
+  </div>
+</div>
               </td>
             </tr>
           </tbody>
